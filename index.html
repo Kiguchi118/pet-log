@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ぶくろく">
 
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 
 <!-- ============================================================
   Firebase（無料プラン）の設定。README.md の手順にそって、
@@ -22,16 +22,19 @@
 ============================================================ -->
 <script>
   const firebaseConfig = {
-    apiKey: "AIzaSyAX63u24PxVkbHYwgs9BppTkWZPmK3w1aw",
-    authDomain: "dog-log-bc973.firebaseapp.com",
-    projectId: "dog-log-bc973",
-    storageBucket: "dog-log-bc973.firebasestorage.app",
-    messagingSenderId: "1079812254787",
-    appId: "1:1079812254787:web:e6ffd4fcfa088ef22378f6",
-    measurementId: "G-QPL3GP9ZXJ"
+    apiKey: "ここにAPIキーを貼り付け",
+    authDomain: "ここにauthDomainを貼り付け",
+    projectId: "ここにprojectIdを貼り付け",
+    storageBucket: "ここにstorageBucketを貼り付け",
+    messagingSenderId: "ここにmessagingSenderIdを貼り付け",
+    appId: "ここにappIdを貼り付け"
   };
   // 家族は1組だけなので、合言葉の代わりに固定のIDを使います。
   const FAMILY_ID = "our-family-home";
+  // ログイン用の固定メールアドレス。README の手順で、Firebaseの
+  // Authentication > Users にこの文字列と全く同じメールで
+  // ユーザーを1人作成してください（パスワードは自由に決めてOK）。
+  const LOGIN_EMAIL = "family@bukuroku-app.com";
 </script>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -53,13 +56,14 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--bg);font-family:'IBM Plex Sans JP',sans-serif;color:var(--ink);}
   #app{max-width:520px;margin:0 auto;min-height:100vh;position:relative;}
-  .display{font-family:'Fraunces',serif;}
+  .display{font-family:'Zen Maru Gothic',sans-serif;}
   .mono{font-family:'IBM Plex Mono',monospace;}
   button{font-family:inherit;-webkit-tap-highlight-color:transparent;}
   input,textarea,select{font-family:'IBM Plex Sans JP',sans-serif;}
   .card{background:var(--card);border-radius:18px;box-shadow:0 1px 2px rgba(59,46,39,.05);}
   .btn-primary{background:var(--coral);color:#fff;font-weight:700;border:none;border-radius:12px;padding:11px 18px;cursor:pointer;}
   .btn-primary:disabled{opacity:.55;cursor:default;}
+  .btn-danger{background:none;border:1px solid var(--coralSoft);color:var(--coral);font-weight:600;border-radius:10px;padding:9px 14px;cursor:pointer;}
   .field{margin-bottom:12px;display:block;}
   .field-label{font-size:12.5px;color:var(--inkSoft);margin-bottom:4px;}
   .field input, .field textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:14.5px;color:var(--ink);}
@@ -73,14 +77,14 @@
   .tabbtn.active{color:var(--coral);font-weight:700;}
   .spin{animation:spin 1s linear infinite;display:inline-block;}
   @keyframes spin{to{transform:rotate(360deg);}}
-  .diary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
-  .diary-cell{aspect-ratio:1/1;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--cardSoft);cursor:pointer;padding:0;}
-  .diary-cell img{width:100%;height:100%;object-fit:cover;display:block;}
   .row-btn{background:var(--coral);color:#fff;font-weight:700;font-size:13.5px;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;white-space:nowrap;}
   .row-btn.good{background:var(--mint);color:var(--mintText);}
   .row-btn.bad{background:var(--coralSoft);color:var(--coralSoftText);}
-  .icon-circle{width:46px;height:46px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;}
+  .icon-circle{width:46px;height:46px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;overflow:hidden;}
+  .icon-circle img{width:100%;height:100%;object-fit:cover;}
   .toppill{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);cursor:pointer;}
+  .photo-picker{width:88px;height:88px;border-radius:50%;background:var(--bg);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin:0 auto;}
+  .photo-picker img{width:100%;height:100%;object-fit:cover;}
 </style>
 </head>
 <body>
@@ -91,8 +95,40 @@ firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 let authReady = false;
-auth.signInAnonymously().catch((e)=>{ console.error("Firebase auth error", e); });
-auth.onAuthStateChanged((u)=>{ authReady = !!u; render(); });
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+
+auth.onAuthStateChanged(async (u) => {
+  const wasLoggedIn = state.loggedIn;
+  authReady = true;
+  state.loggedIn = !!u;
+  render();
+  if(u && !wasLoggedIn){
+    await loadPet();
+    render();
+    if(state.pet) loadHome();
+  }
+});
+
+async function loginSubmit(){
+  const pwInput = document.getElementById("login-pw");
+  const pw = pwInput ? pwInput.value : "";
+  const btn = document.getElementById("login-btn");
+  const err = document.getElementById("login-err");
+  if(err) err.textContent = "";
+  if(!pw){ if(err) err.textContent = "パスワードを入力してください"; return; }
+  btn.disabled = true; btn.textContent = "確認中…";
+  try{
+    await auth.signInWithEmailAndPassword(LOGIN_EMAIL, pw);
+  }catch(e){
+    if(err) err.textContent = "パスワードが違います";
+    btn.disabled = false; btn.textContent = "ログイン";
+  }
+}
+async function logout(){
+  if(!confirm("ログアウトしますか？次回からまたパスワードの入力が必要になります。")) return;
+  await auth.signOut();
+  state.pet = null;
+}
 
 /* ================= refs ================= */
 const groupRef = () => db.collection('groups').doc(FAMILY_ID);
@@ -105,9 +141,12 @@ function getMyName(){ return localStorage.getItem("bukuroku_myname") || ""; }
 function setMyName(n){ localStorage.setItem("bukuroku_myname", n); }
 
 /* ================= helpers ================= */
-function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 function nowLocalInput(){
   const d = new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
+}
+function toLocalInputValue(iso){
+  const d = new Date(iso); d.setMinutes(d.getMinutes()-d.getTimezoneOffset());
   return d.toISOString().slice(0,16);
 }
 function fmtDateHeading(iso){
@@ -119,21 +158,34 @@ function fmtTime(iso){
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
 }
-function ageInfo(birthday){
+function stageLabel(species, years){
+  if(years < 1) return species==="cat" ? "子猫期" : species==="dog" ? "子犬期" : "幼齢期";
+  if(years < 7) return species==="cat" ? "成猫期" : species==="dog" ? "成犬期" : "成体期";
+  return "シニア期";
+}
+function ageInfo(birthday, species){
   if(!birthday) return null;
   const b = new Date(birthday), now = new Date();
   const days = Math.floor((now-b)/86400000);
   let years = now.getFullYear()-b.getFullYear(), months = now.getMonth()-b.getMonth();
   if(now.getDate()<b.getDate()) months--;
   if(months<0){ years--; months+=12; }
-  const stage = years<1 ? "子犬・子猫期" : years<7 ? "成犬・成猫期" : "シニア期";
-  return { days, years, months, stage };
+  return { days, years, months, stage: stageLabel(species, years) };
+}
+function humanAgeApprox(years, months){
+  const t = years + months/12;
+  if(t <= 0) return null;
+  let h;
+  if(t <= 1) h = t*15;
+  else if(t <= 2) h = 15 + (t-1)*9;
+  else h = 24 + (t-2)*4;
+  return Math.max(1, Math.round(h));
 }
 function esc(s){
   return (s==null?"":String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function timeAgo(iso){
-  const diff = (new Date() - new Date(iso))/60000; // minutes
+  const diff = (new Date() - new Date(iso))/60000;
   if(diff < 1) return "たった今";
   if(diff < 60) return `${Math.floor(diff)}分前`;
   if(diff < 1440) return `${Math.floor(diff/60)}時間前`;
@@ -161,21 +213,30 @@ function resizeImageFile(file, maxWidth=640, quality=0.5){
 }
 
 /* ================= categories ================= */
-/* quick:"instant"  -> button logs immediately with a sensible default
-   quick:"binary"   -> two buttons (成功/失敗), each logs immediately
-   quick:false      -> button opens a detail form (fields required) */
 const CATEGORIES = [
   {key:"food", label:"ごはん", emoji:"🍚", quick:"instant"},
   {key:"water", label:"お水", emoji:"💧", quick:"instant"},
   {key:"pee", label:"おしっこ", emoji:"💧", quick:"binary"},
   {key:"poop", label:"うんち", emoji:"💩", quick:"binary"},
-  {key:"weight", label:"体重", emoji:"⚖️", quick:false},
   {key:"health", label:"健康チェック", emoji:"🩺", quick:false},
+  {key:"weight", label:"体重", emoji:"⚖️", quick:false},
   {key:"hospital", label:"通院", emoji:"🏥", quick:false},
   {key:"medication", label:"投薬", emoji:"💊", quick:false},
   {key:"trimming", label:"トリミング", emoji:"✂️", quick:false},
 ];
 const CAT_BY_KEY = Object.fromEntries(CATEGORIES.map(c=>[c.key,c]));
+const DAILY_CATEGORIES = CATEGORIES.filter(c => ["food","water","pee","poop","health"].includes(c.key));
+const HEALTH_CATEGORIES = CATEGORIES.filter(c => ["weight","hospital","medication","trimming"].includes(c.key));
+
+const PREVENTIVE_ITEMS = [
+  {key:"vax_rabies", group:"vaccine", label:"狂犬病", emoji:"💉", intervalDays:365},
+  {key:"vax_combo", group:"vaccine", label:"混合", emoji:"💉", intervalDays:365},
+  {key:"prev_filaria", group:"medicine", label:"フィラリア", emoji:"💗", intervalDays:30},
+  {key:"prev_flea", group:"medicine", label:"ノミ", emoji:"🐛", intervalDays:30},
+  {key:"prev_tick", group:"medicine", label:"マダニ", emoji:"🕷️", intervalDays:30},
+];
+const PREV_BY_KEY = Object.fromEntries(PREVENTIVE_ITEMS.map(p=>[p.key,p]));
+const ALL_TYPE_META = { ...CAT_BY_KEY, ...PREV_BY_KEY };
 
 function summarizeRecord(r){
   switch(r.type){
@@ -188,41 +249,50 @@ function summarizeRecord(r){
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
     case "medication": return [r.name, r.memo].filter(Boolean).join(" ・ ");
     case "trimming": return [r.shop, r.staff, r.nextDate?`次回 ${r.nextDate}`:"", r.memo].filter(Boolean).join(" ・ ");
-    default: return r.memo||"";
+    default:
+      if(PREV_BY_KEY[r.type]) return r.memo || `${PREV_BY_KEY[r.type].label}を記録`;
+      return r.memo || "";
   }
 }
 
 /* ================= state ================= */
 const state = {
+  loggedIn: false,
   pet: null,
   tab: "home",
   homeRecords: [], homeUpcoming: [], homeLoading: true,
+  healthSectionOpen: true,
   historyRecords: [], historyLastDoc: null, historyHasMore: true, historyLoading: false,
   diary: [], diaryLastDoc: null, diaryHasMore: true, diaryLoading: false,
   weightPoints: null,
-  modal: null, modalSub: {},
-  viewingDiary: null,
+  modal: null, modalSub: {}, modalPhoto: null,
 };
 
 /* ================= data loading ================= */
 async function loadPet(){
-  const doc = await groupRef().get();
-  state.pet = doc.exists ? doc.data() : null;
+  try{
+    const doc = await groupRef().get();
+    state.pet = doc.exists ? doc.data() : null;
+  }catch(e){ console.error("loadPet error", e); state.pet = null; }
 }
 async function loadHome(){
   state.homeLoading = true; render();
-  const snap = await recordsRef().orderBy("datetime","desc").limit(200).get();
-  state.homeRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
-  const upSnap = await upcomingRef().get();
-  state.homeUpcoming = upSnap.docs.map(d=>({type:d.id, ...d.data()}));
+  try{
+    const snap = await recordsRef().orderBy("datetime","desc").limit(300).get();
+    state.homeRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    const upSnap = await upcomingRef().get();
+    state.homeUpcoming = upSnap.docs.map(d=>({type:d.id, ...d.data()}));
+  }catch(e){ console.error("loadHome error", e); }
   state.homeLoading = false; render();
 }
 async function loadHistory(){
   state.historyLoading = true; render();
-  const snap = await recordsRef().orderBy("datetime","desc").limit(30).get();
-  state.historyRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
-  state.historyLastDoc = snap.docs[snap.docs.length-1] || null;
-  state.historyHasMore = snap.docs.length === 30;
+  try{
+    const snap = await recordsRef().orderBy("datetime","desc").limit(30).get();
+    state.historyRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    state.historyLastDoc = snap.docs[snap.docs.length-1] || null;
+    state.historyHasMore = snap.docs.length === 30;
+  }catch(e){ console.error("loadHistory error", e); }
   state.historyLoading = false; render();
 }
 async function loadMoreHistory(){
@@ -236,17 +306,26 @@ async function loadMoreHistory(){
 }
 async function loadWeight(){
   state.weightPoints = null; render();
-  const snap = await recordsRef().where("type","==","weight").orderBy("datetime","asc").get();
-  state.weightPoints = snap.docs.map(d=>d.data());
+  try{
+    const snap = await recordsRef().where("type","==","weight").get();
+    const pts = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+    pts.sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
+    state.weightPoints = pts;
+  }catch(e){
+    console.error("loadWeight error", e);
+    state.weightPoints = [];
+  }
   render();
   setTimeout(drawWeightChart, 30);
 }
 async function loadDiary(){
   state.diaryLoading = true; render();
-  const snap = await diaryRef().orderBy("date","desc").limit(18).get();
-  state.diary = snap.docs.map(d=>({id:d.id, ...d.data()}));
-  state.diaryLastDoc = snap.docs[snap.docs.length-1] || null;
-  state.diaryHasMore = snap.docs.length === 18;
+  try{
+    const snap = await diaryRef().orderBy("date","desc").limit(18).get();
+    state.diary = snap.docs.map(d=>({id:d.id, ...d.data()}));
+    state.diaryLastDoc = snap.docs[snap.docs.length-1] || null;
+    state.diaryHasMore = snap.docs.length === 18;
+  }catch(e){ console.error("loadDiary error", e); }
   state.diaryLoading = false; render();
 }
 async function loadMoreDiary(){
@@ -259,7 +338,29 @@ async function loadMoreDiary(){
   state.diaryLoading = false; render();
 }
 
-/* ================= pet setup ================= */
+/* ================= pet photo picker (shared by setup & settings) ================= */
+function renderPetPhotoBox(photo){
+  return `
+  <input type="file" accept="image/*" id="pet-photo-file" style="display:none" onchange="handlePetPhoto(this)">
+  <div id="pet-photo-box" class="photo-picker" onclick="document.getElementById('pet-photo-file').click()">
+    ${photo ? `<img src="${photo}">` : `<span style="font-size:11px;color:var(--inkSoft);text-align:center;line-height:1.4;">📷<br>顔写真</span>`}
+  </div>`;
+}
+async function handlePetPhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const box = document.getElementById("pet-photo-box");
+  box.innerHTML = `<span class="mono spin" style="font-size:11px;">…</span>`;
+  try{
+    const dataUrl = await resizeImageFile(file, 480, 0.62);
+    state.tmpPetPhoto = dataUrl;
+    box.innerHTML = `<img src="${dataUrl}">`;
+  }catch(e){
+    box.innerHTML = `<span style="font-size:10px;color:var(--inkSoft);">失敗</span>`;
+  }
+}
+
+/* ================= pet setup (first run only) ================= */
 async function submitPetSetup(){
   const name = document.getElementById("pet-name").value.trim();
   if(!name){ document.getElementById("pet-err").textContent = "名前を入力してください"; return; }
@@ -267,7 +368,8 @@ async function submitPetSetup(){
   const gender = state.tmpGender || "unknown";
   const breed = document.getElementById("pet-breed").value.trim();
   const birthday = document.getElementById("pet-birthday").value;
-  const pet = { name, species, gender, breed, birthday, createdAt: new Date().toISOString() };
+  const photo = state.tmpPetPhoto || null;
+  const pet = { name, species, gender, breed, birthday, photo, createdAt: new Date().toISOString() };
   await groupRef().set(pet, { merge: true });
   state.pet = pet;
   state.tab = "home";
@@ -284,51 +386,103 @@ async function quickLog(catKey, extra){
 }
 
 /* ================= modal (detail form) ================= */
-function openRecordModal(catKey){
-  state.modal = { type:"record", catKey };
-  state.modalSub = { amount:"ふつう", status:"", condition:"元気" };
+function openRecordModal(catKey, editRecord){
+  state.modal = { type:"record", catKey, editRecord: editRecord || null };
+  state.modalSub = {
+    amount: (editRecord && editRecord.amount) || "ふつう",
+    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "",
+    condition: (editRecord && editRecord.condition) || "元気",
+  };
   render();
 }
-function openDiaryModal(){
-  state.modal = { type:"diary" };
-  state.modalPhoto = null; state.modalSub = { mood:"元気" };
+function openDiaryModal(editEntry){
+  state.modal = { type:"diary", editEntry: editEntry || null };
+  state.modalPhoto = editEntry ? (editEntry.photo || null) : null;
+  state.modalSub = { mood: (editEntry && editEntry.mood) || "元気" };
   render();
 }
 function closeModal(){ state.modal = null; render(); }
 function setModalSub(field, value){ state.modalSub[field] = value; render(); }
 
+function findRecordById(id){
+  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || null;
+}
+function openEditRecordById(id){
+  const r = findRecordById(id);
+  if(r) openRecordModal(r.type, r);
+}
+
 async function saveRecordFromModal(){
   const catKey = state.modal.catKey;
+  const editRecord = state.modal.editRecord;
   const dtVal = document.getElementById("rf-datetime").value;
   const memo = document.getElementById("rf-memo") ? document.getElementById("rf-memo").value.trim() : "";
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
-  let rec = { type: catKey, datetime: new Date(dtVal).toISOString(), memo, author: getMyName(), createdAt: new Date().toISOString() };
+  let rec = {
+    type: catKey,
+    datetime: new Date(dtVal).toISOString(),
+    memo,
+    author: editRecord ? (editRecord.author || getMyName()) : getMyName(),
+    createdAt: editRecord ? editRecord.createdAt : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 
-  if(catKey === "food" || catKey === "water"){ rec.amount = state.modalSub.amount; }
-  if(catKey === "pee" || catKey === "poop"){ rec.status = state.modalSub.status; }
-  if(catKey === "weight"){
-    const v = parseFloat(val("rf-weight"));
-    if(isNaN(v)){ document.getElementById("rf-err").textContent = "体重を入力してください"; return; }
-    rec.value = v;
+  if(CAT_BY_KEY[catKey]){
+    if(catKey === "food" || catKey === "water"){ rec.amount = state.modalSub.amount; }
+    if(catKey === "pee" || catKey === "poop"){ rec.status = state.modalSub.status; }
+    if(catKey === "weight"){
+      const v = parseFloat(val("rf-weight"));
+      if(isNaN(v)){ document.getElementById("rf-err").textContent = "体重を入力してください"; return; }
+      rec.value = v;
+    }
+    if(catKey === "health"){ rec.condition = state.modalSub.condition; }
+    if(catKey === "hospital"){ rec.reason = val("rf-reason"); rec.cost = val("rf-cost") ? Number(val("rf-cost")) : null; rec.nextVisit = val("rf-nextvisit"); }
+    if(catKey === "medication"){ rec.name = val("rf-medname"); }
+    if(catKey === "trimming"){ rec.shop = val("rf-shop"); rec.staff = val("rf-staff"); rec.nextDate = val("rf-nextdate"); }
   }
-  if(catKey === "health"){ rec.condition = state.modalSub.condition; }
-  if(catKey === "hospital"){ rec.reason = val("rf-reason"); rec.cost = val("rf-cost") ? Number(val("rf-cost")) : null; rec.nextVisit = val("rf-nextvisit"); }
-  if(catKey === "medication"){ rec.name = val("rf-medname"); }
-  if(catKey === "trimming"){ rec.shop = val("rf-shop"); rec.staff = val("rf-staff"); rec.nextDate = val("rf-nextdate"); }
 
   const btn = document.getElementById("rf-submit");
   btn.disabled = true; btn.textContent = "保存中…";
   try{
-    await recordsRef().add(rec);
+    if(editRecord){
+      await recordsRef().doc(editRecord.id).update(rec);
+    } else {
+      await recordsRef().add(rec);
+    }
     if(catKey === "hospital" && rec.nextVisit){ await upcomingRef().doc("hospital").set({ label:"通院", date: rec.nextVisit, memo: rec.memo }); }
     if(catKey === "trimming" && rec.nextDate){ await upcomingRef().doc("trimming").set({ label:"トリミング", date: rec.nextDate, memo: rec.memo }); }
+    if(PREV_BY_KEY[catKey]){
+      const item = PREV_BY_KEY[catKey];
+      const next = new Date(rec.datetime);
+      next.setDate(next.getDate() + item.intervalDays);
+      await upcomingRef().doc(catKey).set({
+        label: `${item.label}${item.group==='vaccine'?'接種':'投与'}`,
+        date: next.toISOString().slice(0,10),
+        memo: rec.memo,
+      });
+    }
     closeModal();
     if(state.tab === "home") loadHome();
     if(state.tab === "history") loadHistory();
     if(state.tab === "weight") loadWeight();
   }catch(e){
     document.getElementById("rf-err").textContent = "保存できませんでした。通信状況を確認してください。";
-    btn.disabled = false; btn.textContent = "記録する";
+    btn.disabled = false; btn.textContent = editRecord ? "保存する" : "記録する";
+  }
+}
+
+async function deleteRecordFromModal(){
+  const editRecord = state.modal.editRecord;
+  if(!editRecord) return;
+  if(!confirm("この記録を削除しますか？元に戻せません。")) return;
+  try{
+    await recordsRef().doc(editRecord.id).delete();
+    closeModal();
+    if(state.tab === "home") loadHome();
+    if(state.tab === "history") loadHistory();
+    if(state.tab === "weight") loadWeight();
+  }catch(e){
+    alert("削除できませんでした。通信状況を確認してください。");
   }
 }
 
@@ -346,20 +500,43 @@ async function handleDiaryPhoto(input){
   }
 }
 async function saveDiaryFromModal(){
+  const editEntry = state.modal.editEntry;
   const date = document.getElementById("df-date").value;
   const caption = document.getElementById("df-caption").value.trim();
   const mood = state.modalSub.mood || "元気";
-  const entry = { date: new Date(date).toISOString(), caption, mood, photo: state.modalPhoto || null, author: getMyName(), createdAt: new Date().toISOString() };
+  const entry = { date: new Date(date).toISOString(), caption, mood, photo: state.modalPhoto || null };
   const btn = document.getElementById("df-submit");
   btn.disabled = true; btn.textContent = "保存中…";
   try{
-    await diaryRef().add(entry);
+    if(editEntry){
+      await diaryRef().doc(editEntry.id).update(entry);
+    } else {
+      entry.author = getMyName();
+      entry.createdAt = new Date().toISOString();
+      await diaryRef().add(entry);
+    }
     closeModal();
     if(state.tab === "diary") loadDiary();
   }catch(e){
     document.getElementById("df-err").textContent = "保存できませんでした。写真が大きすぎる場合は別の写真でお試しください。";
     btn.disabled = false; btn.textContent = "残す";
   }
+}
+async function deleteDiaryFromModal(){
+  const editEntry = state.modal.editEntry;
+  if(!editEntry) return;
+  if(!confirm("この日記を削除しますか？元に戻せません。")) return;
+  try{
+    await diaryRef().doc(editEntry.id).delete();
+    closeModal();
+    if(state.tab === "diary") loadDiary();
+  }catch(e){
+    alert("削除できませんでした。通信状況を確認してください。");
+  }
+}
+function openDiaryEdit(id){
+  const e = state.diary.find(x=>x.id===id);
+  if(e) openDiaryModal(e);
 }
 
 /* ================= settings actions ================= */
@@ -374,7 +551,8 @@ async function savePetSettings(){
   const gender = state.tmpGender || state.pet.gender;
   const breed = document.getElementById("set-pet-breed").value.trim();
   const birthday = document.getElementById("set-pet-birthday").value;
-  const updated = { ...state.pet, name, species, gender, breed, birthday };
+  const photo = state.tmpPetPhoto !== undefined ? state.tmpPetPhoto : (state.pet.photo || null);
+  const updated = { ...state.pet, name, species, gender, breed, birthday, photo };
   await groupRef().set(updated, { merge: true });
   state.pet = updated;
   render();
@@ -394,7 +572,7 @@ let weightChartInstance = null;
 function drawWeightChart(){
   const canvas = document.getElementById("weight-canvas");
   if(!canvas || !state.weightPoints || state.weightPoints.length < 2) return;
-  const labels = state.weightPoints.map(p => new Date(p.date).toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"}));
+  const labels = state.weightPoints.map(p => new Date(p.datetime).toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"}));
   const data = state.weightPoints.map(p => p.value);
   if(weightChartInstance) weightChartInstance.destroy();
   weightChartInstance = new Chart(canvas.getContext("2d"), {
@@ -415,10 +593,7 @@ function renderTopBar(){
   return `
   <div style="position:sticky;top:0;z-index:10;background:var(--bg);padding:14px 16px 8px;display:flex;align-items:center;justify-content:space-between;">
     <button class="toppill" onclick="switchTab('home')">🏠</button>
-    <div style="display:flex;align-items:center;gap:7px;">
-      <span style="font-size:19px;">🐾</span>
-      <span class="display" style="font-weight:700;font-size:18px;">ぶくろく</span>
-    </div>
+    <span style="font-size:20px;">🐾</span>
     <button class="toppill" onclick="switchTab('settings')">☰</button>
   </div>`;
 }
@@ -429,14 +604,11 @@ function renderHome(){
   const pet = state.pet;
   const emoji = pet.species==="dog" ? "🐶" : pet.species==="cat" ? "🐱" : "🐾";
   const genderLabel = pet.gender==="male" ? "♂ 男の子" : pet.gender==="female" ? "♀ 女の子" : "";
-  const age = ageInfo(pet.birthday);
+  const age = ageInfo(pet.birthday, pet.species);
+  const human = age ? humanAgeApprox(age.years, age.months) : null;
 
-  const today = new Date().toISOString().slice(0,10);
-  const todayRecs = state.homeRecords.filter(r => (r.datetime||"").slice(0,10) === today);
   const lastByType = {};
   state.homeRecords.forEach(r => { if(!lastByType[r.type]) lastByType[r.type] = r; });
-
-  const notYet = CATEGORIES.filter(c => !todayRecs.some(r => r.type === c.key));
 
   const upcomingSoon = (state.homeUpcoming||[]).filter(u=>{
     const diff = (new Date(u.date) - new Date())/86400000;
@@ -454,25 +626,13 @@ function renderHome(){
       </div>`).join("")}
   </div>` : ""}
 
-  <div class="card" style="padding:14px 16px;margin-bottom:14px;background:var(--mint);">
-    <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13.5px;color:var(--mintText);margin-bottom:8px;">📋 今日まだのお世話</div>
-    ${notYet.length===0 ? `<div style="font-size:13.5px;color:var(--mintText);">今日の分はすべて記録済みです 🎉</div>` :
-      notYet.slice(0,3).map(c=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;">
-          <span style="font-size:18px;">${c.emoji}</span>
-          <div style="flex:1;">
-            <div style="font-size:14px;font-weight:600;">${esc(pet.name)}・${c.label}</div>
-            <div style="font-size:12px;color:var(--mintText);">まだ一度も記録がありません</div>
-          </div>
-        </div>`).join("")
-    }
-  </div>
-
   <div class="card" style="padding:18px;margin-bottom:14px;">
     <div style="display:flex;align-items:center;gap:14px;">
-      <div style="width:64px;height:64px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;">${emoji}</div>
+      <div style="width:64px;height:64px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;">
+        ${pet.photo ? `<img src="${pet.photo}" style="width:100%;height:100%;object-fit:cover;">` : emoji}
+      </div>
       <div style="flex:1;min-width:0;">
-        <div class="display" style="font-weight:700;font-size:21px;">${esc(pet.name)}</div>
+        <div class="display" style="font-weight:700;font-size:22px;">${esc(pet.name)}</div>
         <div class="chip-row" style="margin-top:6px;">
           <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:4px 11px;font-size:12px;">${pet.species==="dog"?"🐶 犬":pet.species==="cat"?"🐱 猫":"🐾"}</span>
           ${genderLabel ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:4px 11px;font-size:12px;">${genderLabel}</span>` : ""}
@@ -481,18 +641,24 @@ function renderHome(){
       <button class="toppill" onclick="openPetEdit()">✏️</button>
     </div>
     ${age ? `
-    <div style="display:flex;align-items:baseline;gap:14px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
-      <div><span class="mono" style="font-size:26px;font-weight:600;">${age.days}</span><span style="font-size:12px;color:var(--inkSoft);"> 日 生後</span></div>
-      <div style="font-size:12.5px;color:var(--inkSoft);">${age.years>0?`${age.years}歳${age.months}ヶ月`:`生後${age.months}ヶ月`} ・ <span style="background:var(--chip);color:var(--chipText);padding:2px 9px;border-radius:999px;">${age.stage}</span></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
+      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
+        <div><span class="mono" style="font-size:26px;font-weight:600;">${age.days}</span><span style="font-size:12px;color:var(--inkSoft);"> 日 生後</span></div>
+        <div style="font-size:12.5px;color:var(--inkSoft);">${age.years>0?`${age.years}歳${age.months}ヶ月`:`生後${age.months}ヶ月`} ・ <span style="background:var(--chip);color:var(--chipText);padding:2px 9px;border-radius:999px;">${age.stage}</span></div>
+      </div>
+      ${human ? `<div style="font-size:12px;color:var(--inkSoft);margin-top:8px;">🐾 人間換算で目安 約 <span class="mono" style="font-weight:600;color:var(--ink);">${human}歳</span>（簡易的な推定です）</div>` : ""}
     </div>` : ""}
   </div>
 
-  ${state.homeLoading ? `<div style="text-align:center;padding:20px;"><span class="spin">⏳</span></div>` : renderCategoryRows(lastByType)}
+  <div style="font-size:12.5px;font-weight:700;color:var(--inkSoft);margin:4px 2px 8px;">📋 日々のお世話</div>
+  ${state.homeLoading ? `<div style="text-align:center;padding:20px;"><span class="spin">⏳</span></div>` : renderCategoryRows(DAILY_CATEGORIES, lastByType)}
+
+  ${renderHealthSection(lastByType)}
   `;
 }
 
-function renderCategoryRows(lastByType){
-  return CATEGORIES.map(c => {
+function renderCategoryRows(list, lastByType){
+  return list.map(c => {
     const last = lastByType[c.key];
     const subtitle = last ? `${esc(summarizeRecord(last))} ・ ${timeAgo(last.datetime)}` : "まだ記録なし";
     let action = "";
@@ -519,10 +685,57 @@ function renderCategoryRows(lastByType){
   }).join("");
 }
 
-/* pet edit reuses the settings pet form inside a modal-like quick screen */
+function renderPreventiveRow(item, lastByType){
+  const last = lastByType[item.key];
+  const subtitle = last ? `前回 ${last.datetime.slice(0,10)}${last.memo?(' ・ '+esc(last.memo)):''}` : "まだ記録がありません";
+  const btnLabel = item.group==="vaccine" ? "接種" : "投与";
+  return `
+  <div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;">
+    <button onclick="openRecordModal('${item.key}')" style="background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;gap:12px;flex:1;min-width:0;text-align:left;">
+      <div class="icon-circle" style="background:var(--coralSoft);">${item.emoji}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:15px;">${item.label}</div>
+        <div style="font-size:12px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${subtitle}</div>
+      </div>
+    </button>
+    <button class="row-btn" onclick="openRecordModal('${item.key}')">${btnLabel}</button>
+  </div>`;
+}
+
+function renderHealthSection(lastByType){
+  const open = state.healthSectionOpen !== false;
+  const header = `
+  <div class="card" style="padding:14px 16px;margin-top:18px;margin-bottom:${open?'12px':'0'};display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="state.healthSectionOpen=${open?'false':'true'};render();">
+    <div style="width:42px;height:42px;border-radius:50%;background:var(--coralSoft);display:flex;align-items:center;justify-content:center;font-size:19px;">❤️</div>
+    <div style="flex:1;min-width:0;">
+      <div style="font-weight:700;font-size:15px;">健康・予防の管理</div>
+      <div style="font-size:11.5px;color:var(--inkSoft);">ワクチン・お薬・トリミング・体重</div>
+    </div>
+    <div style="font-size:13px;color:var(--inkSoft);">${open?'︿':'﹀'}</div>
+  </div>`;
+  if(!open) return header;
+
+  const vaxRows = PREVENTIVE_ITEMS.filter(p=>p.group==="vaccine").map(p=>renderPreventiveRow(p, lastByType)).join("");
+  const medRows = PREVENTIVE_ITEMS.filter(p=>p.group==="medicine").map(p=>renderPreventiveRow(p, lastByType)).join("");
+  const generalRows = renderCategoryRows(HEALTH_CATEGORIES, lastByType);
+
+  return header + `
+  <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:2px 2px 8px;">💉 予防・ワクチン</div>
+  ${vaxRows}
+  <div class="card" style="padding:12px 14px;margin:6px 0 14px;background:var(--mint);display:flex;gap:8px;align-items:flex-start;">
+    <span style="font-size:14px;">ℹ️</span>
+    <div style="font-size:12px;color:var(--mintText);line-height:1.6;">前回接種した日がわかれば入力しておくと、次回の目安が上の「次回の予定」に表示されます。わからない場合は動物病院に確認すると安心です。</div>
+  </div>
+  <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:4px 2px 8px;">💊 予防のお薬（月1回の目安）</div>
+  ${medRows}
+  <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:14px 2px 8px;">🩺 その他の健康管理</div>
+  ${generalRows}
+  `;
+}
+
 function openPetEdit(){ state.tab = "settings"; state.modal=null; render(); }
 
-/* ================= HISTORY (full past records) ================= */
+/* ================= HISTORY (full past records, tap to edit) ================= */
 function renderHistory(){
   const grouped = {};
   state.historyRecords.forEach(r => {
@@ -540,11 +753,11 @@ function renderHistory(){
         <div class="mono" style="font-size:12px;color:var(--inkSoft);margin-bottom:6px;">${fmtDateHeading(day)}</div>
         <div class="card" style="overflow:hidden;">
           ${grouped[day].map((r,i)=>{
-            const cat = CAT_BY_KEY[r.type] || {emoji:"📝"};
+            const meta = ALL_TYPE_META[r.type] || {emoji:"📝"};
             return `
-            <div style="display:flex;gap:10px;padding:11px 14px;${i>0?'border-top:1px solid var(--line);':''}align-items:flex-start;">
+            <div onclick='openEditRecordById(${JSON.stringify(r.id)})' style="display:flex;gap:10px;padding:11px 14px;${i>0?'border-top:1px solid var(--line);':''}align-items:flex-start;cursor:pointer;">
               <div class="mono" style="font-size:12.5px;color:var(--inkSoft);min-width:40px;padding-top:2px;">${fmtTime(r.datetime)}</div>
-              <div style="padding-top:1px;font-size:17px;">${cat.emoji}</div>
+              <div style="padding-top:1px;font-size:17px;">${meta.emoji}</div>
               <div style="flex:1;min-width:0;">
                 <div style="font-size:13.5px;line-height:1.4;">${esc(summarizeRecord(r))}</div>
                 ${r.author ? `<div class="mono" style="font-size:10.5px;color:var(--inkSoft);margin-top:2px;">${esc(r.author)}</div>` : ""}
@@ -555,6 +768,7 @@ function renderHistory(){
       </div>`).join("")
   }
   ${state.historyHasMore ? `<button onclick="loadMoreHistory()" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : ""}
+  <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;margin-top:10px;">記録をタップすると編集・削除できます</div>
   `;
 }
 
@@ -563,16 +777,49 @@ function renderWeight(){
   const log = state.weightPoints;
   const latest = log && log.length ? log[log.length-1] : null;
   const prev = log && log.length>1 ? log[log.length-2] : null;
-  const diff = latest && prev ? (latest.value - prev.value).toFixed(2) : null;
+  let monthAgo = null;
+  if(log && log.length>1 && latest){
+    const target = new Date(latest.datetime); target.setDate(target.getDate()-30);
+    const candidates = log.filter(p => new Date(p.datetime) <= target);
+    monthAgo = candidates.length ? candidates[candidates.length-1] : null;
+  }
+  const minVal = log && log.length ? Math.min(...log.map(p=>p.value)) : null;
+  const maxVal = log && log.length ? Math.max(...log.map(p=>p.value)) : null;
+
+  function diffBlock(label, from, isFirst){
+    if(!from || !latest || from === latest) return "";
+    const d = latest.value - from.value;
+    const flat = Math.abs(d) < 0.005;
+    const pct = from.value ? (d/from.value*100) : 0;
+    const up = d > 0;
+    const color = flat ? "var(--inkSoft)" : (up ? "var(--coral)" : "var(--mintText)");
+    const arrow = flat ? "→" : (up ? "↑" : "↓");
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;${isFirst?'':'border-top:1px solid var(--line);'}">
+      <span style="font-size:13px;color:var(--inkSoft);">${label}と比較</span>
+      <span class="mono" style="font-size:14px;font-weight:600;color:${color};">${arrow} ${flat?'変化なし':`${Math.abs(d).toFixed(2)} kg（${Math.abs(pct).toFixed(1)}%）`}</span>
+    </div>`;
+  }
+
   return `
-  <div class="card" style="padding:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-size:12px;color:var(--inkSoft);">最新の体重</div>
-      <div class="mono" style="font-size:26px;">${latest?`${latest.value} kg`:"—"}</div>
-      ${diff!==null ? `<div class="mono" style="font-size:12.5px;color:${diff>0?'var(--coral)':diff<0?'var(--mintText)':'var(--inkSoft)'};">前回から ${diff>0?"+":""}${diff} kg</div>` : ""}
+  <div class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <div style="font-size:12px;color:var(--inkSoft);">最新の体重</div>
+        <div class="mono" style="font-size:30px;font-weight:600;">${latest?`${latest.value} kg`:(log===null?"…":"—")}</div>
+      </div>
+      <button class="row-btn" onclick="openRecordModal('weight')">＋ 記録</button>
     </div>
-    <button class="row-btn" onclick="openRecordModal('weight')">＋ 記録</button>
+    ${prev ? diffBlock("前回", prev, true) : ""}
+    ${monthAgo ? diffBlock("1ヶ月前", monthAgo, !prev) : ""}
   </div>
+
+  ${minVal!==null ? `
+  <div class="card" style="padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-around;text-align:center;">
+    <div><div class="mono" style="font-size:17px;">${minVal} kg</div><div style="font-size:11px;color:var(--inkSoft);">最小</div></div>
+    <div><div class="mono" style="font-size:17px;">${maxVal} kg</div><div style="font-size:11px;color:var(--inkSoft);">最大</div></div>
+    <div><div class="mono" style="font-size:17px;">${log.length}</div><div style="font-size:11px;color:var(--inkSoft);">記録数</div></div>
+  </div>` : ""}
+
   <div class="card" style="padding:16px 8px 8px;">
     ${log===null ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
       log.length<2 ? `<div style="text-align:center;padding:24px 12px;color:var(--inkSoft);font-size:13px;">体重の記録が2件以上になるとグラフが表示されます。</div>` :
@@ -581,31 +828,36 @@ function renderWeight(){
   </div>`;
 }
 
-/* ================= DIARY ================= */
+/* ================= DIARY (list with date + author, tap to edit) ================= */
 function renderDiary(){
   return `
   <button onclick="openDiaryModal()" style="width:100%;padding:13px;margin-bottom:14px;border-radius:14px;border:1.5px dashed var(--coral);background:#fff;color:var(--coralDeep);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
     📷 今日の一枚を残す
   </button>
-  ${state.diaryLoading ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
+  ${state.diaryLoading && state.diary.length===0 ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
     state.diary.length===0 ? `<div style="text-align:center;padding:30px 20px;color:var(--inkSoft);font-size:13.5px;">まだ日記がありません。</div>` :
-    `<div class="diary-grid">
-      ${state.diary.map(e=>`
-        <button class="diary-cell" onclick='viewDiaryEntry(${JSON.stringify(e.id)})'>
-          ${e.photo ? `<img src="${e.photo}">` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:22px;">${e.mood==="元気"?"😊":e.mood==="不調"?"😟":"😐"}</div>`}
-        </button>`).join("")}
-    </div>`
+    state.diary.map(e => `
+      <div class="card" onclick='openDiaryEdit(${JSON.stringify(e.id)})' style="display:flex;gap:12px;padding:12px;margin-bottom:10px;cursor:pointer;align-items:center;">
+        <div style="width:56px;height:56px;border-radius:12px;overflow:hidden;background:var(--cardSoft);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;">
+          ${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;">` : (e.mood==="元気"?"😊":e.mood==="不調"?"😟":"😐")}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${fmtDateHeading(e.date)}</div>
+          <div style="font-size:12px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.caption?esc(e.caption):(e.mood||"")}</div>
+          ${e.author ? `<div class="mono" style="font-size:10.5px;color:var(--inkSoft);margin-top:2px;">${esc(e.author)}</div>` : ""}
+        </div>
+      </div>`).join("")
   }
   ${state.diaryHasMore ? `<button onclick="loadMoreDiary()" style="width:100%;padding:11px;margin-top:14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : ""}
   `;
 }
-function viewDiaryEntry(id){ state.viewingDiary = state.diary.find(e=>e.id===id); render(); }
 
 /* ================= SETTINGS ================= */
 function renderSettings(){
   const pet = state.pet;
   if(state.tmpSpecies === undefined) state.tmpSpecies = pet.species;
   if(state.tmpGender === undefined) state.tmpGender = pet.gender || "unknown";
+  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = pet.photo || null;
   return `
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">あなた</div>
   <div class="card" style="padding:16px;margin-bottom:18px;">
@@ -613,8 +865,17 @@ function renderSettings(){
     <button class="btn-primary" onclick="saveMyNameSetting()">保存</button>
   </div>
 
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">セキュリティ</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
+    </div>
+    <button class="btn-danger" onclick="logout()">ログアウト</button>
+  </div>
+
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
   <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="margin-bottom:14px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
     <label class="field"><div class="field-label">名前</div><input id="set-pet-name" value="${esc(pet.name)}"></label>
     <div class="field">
       <div class="field-label">種類</div>
@@ -639,7 +900,7 @@ function renderSettings(){
 
   <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;line-height:1.7;">
     記録は自動的に消えません。ふたりでずっと残していけます。<br>
-    ※年齢の「歳」表示は簡易的な目安で、正確な人間換算年齢ではありません。
+    ※人間換算年齢・年齢の表示は簡易的な目安です。
   </div>`;
 }
 
@@ -657,7 +918,8 @@ function chipField(label, options, current, subKey){
 }
 function renderRecordModal(){
   const catKey = state.modal.catKey;
-  const cat = CAT_BY_KEY[catKey];
+  const editRecord = state.modal.editRecord;
+  const cat = CAT_BY_KEY[catKey] || PREV_BY_KEY[catKey];
   const sub = state.modalSub;
   let fields = "";
   if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
@@ -669,75 +931,69 @@ function renderRecordModal(){
       <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">気になる</button>
     </div></div>`;
   } else if(catKey === "weight"){
-    fields = `<label class="field"><div class="field-label">体重（kg）</div><input id="rf-weight" type="number" step="0.01" placeholder="例：4.20"></label>`;
+    fields = `<label class="field"><div class="field-label">体重（kg）</div><input id="rf-weight" type="number" step="0.01" placeholder="例：4.20" value="${editRecord?editRecord.value:''}"></label>`;
   } else if(catKey === "health"){
     fields = chipField("今日の様子", ["元気","普通","不調"], sub.condition, "condition");
   } else if(catKey === "hospital"){
     fields = `
-      <label class="field"><div class="field-label">内容・理由</div><input id="rf-reason" placeholder="例：定期健診"></label>
-      <label class="field"><div class="field-label">費用（円・任意）</div><input id="rf-cost" type="number"></label>
-      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextvisit" type="date"></label>`;
+      <label class="field"><div class="field-label">内容・理由</div><input id="rf-reason" placeholder="例：定期健診" value="${esc(editRecord?editRecord.reason:'')}"></label>
+      <label class="field"><div class="field-label">費用（円・任意）</div><input id="rf-cost" type="number" value="${editRecord&&editRecord.cost?editRecord.cost:''}"></label>
+      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextvisit" type="date" value="${esc(editRecord?editRecord.nextVisit||'':'')}"></label>`;
   } else if(catKey === "medication"){
-    fields = `<label class="field"><div class="field-label">薬の名前</div><input id="rf-medname" placeholder="例：フィラリア予防薬"></label>`;
+    fields = `<label class="field"><div class="field-label">薬の名前</div><input id="rf-medname" placeholder="例：フィラリア予防薬" value="${esc(editRecord?editRecord.name:'')}"></label>`;
   } else if(catKey === "trimming"){
     fields = `
-      <label class="field"><div class="field-label">お店（任意）</div><input id="rf-shop"></label>
-      <label class="field"><div class="field-label">担当者（任意）</div><input id="rf-staff"></label>
-      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date"></label>`;
+      <label class="field"><div class="field-label">お店（任意）</div><input id="rf-shop" value="${esc(editRecord?editRecord.shop||'':'')}"></label>
+      <label class="field"><div class="field-label">担当者（任意）</div><input id="rf-staff" value="${esc(editRecord?editRecord.staff||'':'')}"></label>
+      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
   }
+  const dtValue = editRecord ? toLocalInputValue(editRecord.datetime) : nowLocalInput();
+  const memoValue = editRecord ? esc(editRecord.memo||"") : "";
   return `
   <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を記録</div>
+        <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を${editRecord?'編集':'記録'}</div>
         <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <label class="field"><div class="field-label">日時</div><input id="rf-datetime" type="datetime-local" value="${nowLocalInput()}"></label>
+      <label class="field"><div class="field-label">日時</div><input id="rf-datetime" type="datetime-local" value="${dtValue}"></label>
       ${fields}
-      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2"></textarea></label>
+      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2">${memoValue}</textarea></label>
       ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
       <div id="rf-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
-      <button id="rf-submit" class="btn-primary" style="width:100%;margin-top:4px;" onclick="saveRecordFromModal()">記録する</button>
+      <div style="display:flex;gap:8px;">
+        <button id="rf-submit" class="btn-primary" style="flex:1;" onclick="saveRecordFromModal()">${editRecord?'保存する':'記録する'}</button>
+        ${editRecord ? `<button class="btn-danger" onclick="deleteRecordFromModal()">削除</button>` : ""}
+      </div>
     </div>
   </div>`;
 }
 function renderDiaryModal(){
+  const e = state.modal.editEntry;
+  const dateVal = e ? e.date.slice(0,10) : nowLocalInput().slice(0,10);
+  const captionVal = e ? esc(e.caption||"") : "";
   return `
   <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">今日の一枚</div>
+        <div class="display" style="font-weight:700;font-size:19px;">${e?'日記を編集':'今日の一枚'}</div>
         <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <label class="field"><div class="field-label">日付</div><input id="df-date" type="date" value="${nowLocalInput().slice(0,10)}"></label>
+      <label class="field"><div class="field-label">日付</div><input id="df-date" type="date" value="${dateVal}"></label>
       <div class="field">
         <div class="field-label">写真（任意）</div>
         <input type="file" accept="image/*" id="df-file" style="display:none" onchange="handleDiaryPhoto(this)">
         <div id="df-photobox" onclick="document.getElementById('df-file').click()" style="display:flex;align-items:center;justify-content:center;min-height:110px;border-radius:12px;border:1.5px dashed var(--line);background:var(--bg);cursor:pointer;overflow:hidden;">
-          <span class="mono" style="font-size:13px;color:var(--inkSoft);">📷 写真を選ぶ</span>
+          ${state.modalPhoto ? `<img src="${state.modalPhoto}" style="width:100%;border-radius:10px;display:block;">` : `<span class="mono" style="font-size:13px;color:var(--inkSoft);">📷 写真を選ぶ</span>`}
         </div>
       </div>
       ${chipField("今日の様子", ["元気","普通","不調"], state.modalSub.mood||"元気", "mood")}
-      <label class="field"><div class="field-label">一言（任意）</div><textarea id="df-caption" rows="2" placeholder="今日はお散歩でリスを追いかけました"></textarea></label>
+      <label class="field"><div class="field-label">一言（任意）</div><textarea id="df-caption" rows="2" placeholder="今日はお散歩でリスを追いかけました">${captionVal}</textarea></label>
       <div id="df-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
-      <button id="df-submit" class="btn-primary" style="width:100%;margin-top:4px;" onclick="saveDiaryFromModal()">残す</button>
-    </div>
-  </div>`;
-}
-function renderDiaryViewer(){
-  const e = state.viewingDiary;
-  if(!e) return "";
-  return `
-  <div class="modal-backdrop" onclick="if(event.target===this){state.viewingDiary=null;render();}">
-    <div class="modal-sheet" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">${fmtDateHeading(e.date)}</div>
-        <button onclick="state.viewingDiary=null;render();" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      <div style="display:flex;gap:8px;">
+        <button id="df-submit" class="btn-primary" style="flex:1;" onclick="saveDiaryFromModal()">${e?'保存する':'残す'}</button>
+        ${e ? `<button class="btn-danger" onclick="deleteDiaryFromModal()">削除</button>` : ""}
       </div>
-      ${e.photo ? `<img src="${e.photo}" style="width:100%;border-radius:12px;margin-bottom:12px;">` : ""}
-      <div style="font-size:14px;margin-bottom:8px;">${e.mood==="元気"?"😊 元気":e.mood==="不調"?"😟 不調":"😐 普通"}</div>
-      ${e.caption ? `<div style="font-size:14px;line-height:1.7;">${esc(e.caption)}</div>` : ""}
-      ${e.author ? `<div class="mono" style="font-size:11.5px;color:var(--inkSoft);margin-top:12px;">記録者：${esc(e.author)}</div>` : ""}
     </div>
   </div>`;
 }
@@ -746,15 +1002,16 @@ function renderDiaryViewer(){
 function renderPetSetup(){
   if(state.tmpSpecies === undefined) state.tmpSpecies = "dog";
   if(state.tmpGender === undefined) state.tmpGender = "unknown";
+  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = null;
   return `
   <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 20px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
       <span style="font-size:24px;">🐾</span>
-      <span class="display" style="font-weight:700;font-size:26px;">ぶくろく</span>
     </div>
     <div class="display" style="font-weight:700;font-size:20px;margin-bottom:4px;">この子のことを教えて</div>
     <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:22px;">あとから設定からいつでも変更できます</div>
     <div class="card" style="width:100%;max-width:400px;padding:22px;">
+      <div style="margin-bottom:16px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
       <label class="field"><div class="field-label">名前</div><input id="pet-name" placeholder="例：もふ"></label>
       <div class="field">
         <div class="field-label">種類</div>
@@ -780,6 +1037,23 @@ function renderPetSetup(){
   </div>`;
 }
 
+/* ================= login screen ================= */
+function renderLogin(){
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+    <div style="font-size:40px;margin-bottom:10px;">🐾</div>
+    <div class="display" style="font-weight:700;font-size:22px;margin-bottom:24px;">おかえりなさい</div>
+    <div class="card" style="width:100%;max-width:360px;padding:22px;">
+      <label class="field">
+        <div class="field-label">パスワード</div>
+        <input id="login-pw" type="password" onkeydown="if(event.key==='Enter') loginSubmit()" placeholder="••••••••">
+      </label>
+      <div id="login-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
+      <button id="login-btn" class="btn-primary" style="width:100%;" onclick="loginSubmit()">ログイン</button>
+    </div>
+  </div>`;
+}
+
 /* ================= master render ================= */
 const TABS = [
   {key:"home", label:"ホーム", emoji:"🏠"},
@@ -793,6 +1067,10 @@ function render(){
   const app = document.getElementById("app");
   if(!authReady){
     app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;"><span class="spin" style="font-size:24px;">⏳</span></div>`;
+    return;
+  }
+  if(!state.loggedIn){
+    app.innerHTML = renderLogin();
     return;
   }
   if(!state.pet){
@@ -818,17 +1096,11 @@ function render(){
         </button>`).join("")}
     </div>
     ${renderModal()}
-    ${renderDiaryViewer()}
   `;
   if(state.tab === "weight") setTimeout(drawWeightChart, 30);
 }
 
-/* ================= boot ================= */
-(async function boot(){
-  await loadPet();
-  render();
-  if(state.pet){ loadHome(); }
-})();
+render();
 </script>
 </body>
 </html>
