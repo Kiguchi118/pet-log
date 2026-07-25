@@ -17,8 +17,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 
 <!-- ============================================================
-  Firebase（無料プラン）の設定。README.md の手順にそって、
-  下の6つの値をあなたのFirebaseプロジェクトのものに置き換えてください。
+  Firebase設定（お使いのプロジェクトの値を引き継いでいます）
 ============================================================ -->
 <script>
   const firebaseConfig = {
@@ -30,11 +29,7 @@
     appId: "1:1079812254787:web:e6ffd4fcfa088ef22378f6",
     measurementId: "G-QPL3GP9ZXJ"
   };
-  // 家族は1組だけなので、合言葉の代わりに固定のIDを使います。
   const FAMILY_ID = "our-family-home";
-  // ログイン用の固定メールアドレス。README の手順で、Firebaseの
-  // Authentication > Users にこの文字列と全く同じメールで
-  // ユーザーを1人作成してください（パスワードは自由に決めてOK）。
   const LOGIN_EMAIL = "family@bukuroku-app.com";
 </script>
 
@@ -55,8 +50,8 @@
     --amber:#F3D9A6; --amberText:#8A5A16;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);font-family:'IBM Plex Sans JP',sans-serif;color:var(--ink);}
-  #app{max-width:520px;margin:0 auto;min-height:100vh;position:relative;}
+  html,body{margin:0;padding:0;background:var(--bg);font-family:'IBM Plex Sans JP',sans-serif;color:var(--ink);overflow-x:hidden;width:100%;}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden;}
   .display{font-family:'Zen Maru Gothic',sans-serif;}
   .mono{font-family:'IBM Plex Mono',monospace;}
   button{font-family:inherit;-webkit-tap-highlight-color:transparent;}
@@ -65,14 +60,23 @@
   .btn-primary{background:var(--coral);color:#fff;font-weight:700;border:none;border-radius:12px;padding:11px 18px;cursor:pointer;}
   .btn-primary:disabled{opacity:.55;cursor:default;}
   .btn-danger{background:none;border:1px solid var(--coralSoft);color:var(--coral);font-weight:600;border-radius:10px;padding:9px 14px;cursor:pointer;}
-  .field{margin-bottom:12px;display:block;}
+  .field{margin-bottom:12px;display:block;min-width:0;}
   .field-label{font-size:12.5px;color:var(--inkSoft);margin-bottom:4px;}
-  .field input, .field textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 10px;font-size:14.5px;color:var(--ink);}
+  .field input, .field textarea{
+    width:100%;max-width:100%;box-sizing:border-box;min-width:0;
+    background:var(--bg);border:1px solid var(--line);border-radius:10px;
+    padding:9px 10px;font-size:14.5px;color:var(--ink);
+  }
+  input[type="date"],input[type="time"],input[type="datetime-local"]{
+    width:100%;max-width:100%;min-width:0;box-sizing:border-box;
+  }
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0;}
+  .field-row .field{min-width:0;}
   .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
   .chip{font-size:13.5px;padding:7px 13px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;}
   .chip.active{border-color:var(--coral);background:var(--coral);color:#fff;}
   .modal-backdrop{position:fixed;inset:0;background:rgba(59,46,39,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
-  .modal-sheet{background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;}
+  .modal-sheet{background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;}
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom);}
   .tabbtn{flex:1;background:none;border:none;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--inkSoft);}
   .tabbtn.active{color:var(--coral);font-weight:700;}
@@ -83,9 +87,14 @@
   .row-btn.bad{background:var(--coralSoft);color:var(--coralSoftText);}
   .icon-circle{width:46px;height:46px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;overflow:hidden;}
   .icon-circle img{width:100%;height:100%;object-fit:cover;}
-  .toppill{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);cursor:pointer;}
+  .toppill{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);cursor:pointer;flex-shrink:0;}
   .photo-picker{width:88px;height:88px;border-radius:50%;background:var(--bg);border:1.5px dashed var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;margin:0 auto;}
   .photo-picker img{width:100%;height:100%;object-fit:cover;}
+  .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#2E2B27;color:#fff;padding:14px 18px;border-radius:16px;font-size:14px;z-index:200;box-shadow:0 8px 20px rgba(0,0,0,.25);max-width:86vw;line-height:1.5;text-align:left;}
+  .toast-undo{background:none;border:none;color:#fff;text-decoration:underline;font-weight:700;font-size:13.5px;padding:8px 0 0;cursor:pointer;display:block;}
+  .subtab-wrap{display:flex;gap:4px;margin-bottom:16px;background:var(--cardSoft);padding:4px;border-radius:999px;}
+  .subtab-btn{flex:1;padding:8px 0;border-radius:999px;border:none;cursor:pointer;font-size:13px;background:transparent;color:var(--inkSoft);}
+  .subtab-btn.active{background:#fff;font-weight:700;color:var(--ink);}
 </style>
 </head>
 <body>
@@ -136,10 +145,40 @@ const groupRef = () => db.collection('groups').doc(FAMILY_ID);
 const recordsRef = () => groupRef().collection('records');
 const diaryRef = () => groupRef().collection('diary');
 const upcomingRef = () => groupRef().collection('upcoming');
+const eventsRef = () => groupRef().collection('events');
 
 /* ================= local (per-device) name ================= */
 function getMyName(){ return localStorage.getItem("bukuroku_myname") || ""; }
 function setMyName(n){ localStorage.setItem("bukuroku_myname", n); }
+
+/* ================= toast (with optional undo action) ================= */
+function showToast(message, undoFn){
+  state.toast = { message, undo: undoFn || null };
+  render();
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(()=>{ state.toast = null; render(); }, undoFn ? 4500 : 2200);
+}
+async function runToastUndo(){
+  const t = state.toast;
+  if(!t || !t.undo) return;
+  clearTimeout(window._toastTimer);
+  state.toast = null; render();
+  try{
+    await t.undo();
+  }catch(e){ console.error("undo error", e); }
+}
+function statusParenLabel(type, status){
+  if(type !== "pee" && type !== "poop") return "";
+  return `（${status==='bad' ? '失敗' : '成功'}）`;
+}
+function refreshRecordViews(){
+  if(state.tab === "home") loadHome();
+  if(state.tab === "history"){
+    if(state.historySubTab === "calendar") loadCalendarMonth();
+    else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
+  }
+  if(state.tab === "weight") loadWeight();
+}
 
 /* ================= helpers ================= */
 function nowLocalInput(){
@@ -213,7 +252,7 @@ function resizeImageFile(file, maxWidth=640, quality=0.5){
   });
 }
 
-/* ================= categories ================= */
+/* ================= categories (daily-care & health records) ================= */
 const CATEGORIES = [
   {key:"food", label:"ごはん", emoji:"🍚", quick:"instant"},
   {key:"water", label:"お水", emoji:"💧", quick:"instant"},
@@ -238,13 +277,24 @@ const PREVENTIVE_ITEMS = [
 ];
 const PREV_BY_KEY = Object.fromEntries(PREVENTIVE_ITEMS.map(p=>[p.key,p]));
 const ALL_TYPE_META = { ...CAT_BY_KEY, ...PREV_BY_KEY };
+const ALL_LOGGABLE = [...CATEGORIES, ...PREVENTIVE_ITEMS];
+
+/* 「予定」= 未来の予定。記録(records)とは別に管理します。 */
+const EVENT_TYPES = [
+  {key:"hospital", label:"通院", emoji:"🩺"},
+  {key:"trimming", label:"トリミング", emoji:"✂️"},
+  {key:"vaccine", label:"ワクチン", emoji:"💉"},
+  {key:"medication", label:"おくすり", emoji:"💊"},
+  {key:"other", label:"その他", emoji:"🗓️"},
+];
+const EVENT_TYPE_BY_KEY = Object.fromEntries(EVENT_TYPES.map(t=>[t.key,t]));
 
 function summarizeRecord(r){
   switch(r.type){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "お水を記録";
-    case "pee": return [(r.status==="bad"?"気になる様子":"成功"), r.memo].filter(Boolean).join(" ・ ");
-    case "poop": return [(r.status==="bad"?"気になる様子":"成功"), r.memo].filter(Boolean).join(" ・ ");
+    case "pee": return [(r.status==="bad"?"失敗":"成功"), r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.memo].filter(Boolean).join(" ・ ");
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
@@ -256,17 +306,67 @@ function summarizeRecord(r){
   }
 }
 
+/* テキスト全体ではなく「メモなど補足だけ」を返す（バッジと分けて表示するため） */
+function recordDetailText(r){
+  switch(r.type){
+    case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
+    case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
+    case "pee": case "poop": return r.memo || "";
+    case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
+    case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
+    case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
+    case "medication": return [r.name, r.memo].filter(Boolean).join(" ・ ");
+    case "trimming": return [r.shop, r.staff, r.nextDate?`次回 ${r.nextDate}`:"", r.memo].filter(Boolean).join(" ・ ");
+    default: return r.memo || "";
+  }
+}
+function recordBadge(r){
+  if(r.type !== "pee" && r.type !== "poop") return "";
+  const bad = r.status === "bad";
+  return `<span style="background:${bad?'var(--coralSoft)':'var(--mint)'};color:${bad?'var(--coralSoftText)':'var(--mintText)'};padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px;flex-shrink:0;">${bad?'失敗':'成功'}</span>`;
+}
+/* きろく(リスト・カレンダー)で使う共通の記録行テンプレート */
+function renderRecordRow(r, opts){
+  opts = opts || {};
+  const meta = ALL_TYPE_META[r.type] || { emoji: "📝", label: r.type };
+  const detail = recordDetailText(r);
+  return `
+  <div onclick='openEditRecordById(${JSON.stringify(r.id)})' style="display:flex;gap:10px;padding:12px 14px;${opts.divider?'border-top:1px solid var(--line);':''}align-items:center;cursor:pointer;">
+    <div class="mono" style="font-size:12.5px;color:var(--inkSoft);min-width:38px;flex-shrink:0;">${fmtTime(r.datetime)}</div>
+    <div class="icon-circle" style="width:38px;height:38px;font-size:16px;flex-shrink:0;">${meta.emoji}</div>
+    <div style="flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-weight:700;font-size:14px;">${esc(meta.label)}</span>
+        ${recordBadge(r)}
+      </div>
+      ${detail ? `<div style="font-size:12.5px;color:var(--ink);margin-top:2px;">${esc(detail)}</div>` : ""}
+      ${r.author ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-top:3px;">記録: 🧑 ${esc(r.author)}</div>` : ""}
+    </div>
+    <span style="font-size:15px;color:var(--inkSoft);flex-shrink:0;">✏️</span>
+  </div>`;
+}
+
 /* ================= state ================= */
 const state = {
   loggedIn: false,
   pet: null,
   tab: "home",
-  homeRecords: [], homeUpcoming: [], homeLoading: true,
+  homeRecords: [], homeUpcoming: [], homeEvents: [], homeLoading: true,
   healthSectionOpen: true,
+  petDetailOpen: false,
+
+  historySubTab: "list",
   historyRecords: [], historyLastDoc: null, historyHasMore: true, historyLoading: false,
+  statsPeriod: 7, stats: null,
+
+  calendarMonth: (()=>{ const n=new Date(); return {y:n.getFullYear(), m:n.getMonth()+1}; })(),
+  calendarSelectedDay: new Date().toISOString().slice(0,10),
+  calendarRecords: [], calendarEvents: [], calendarLoading: false,
+
   diary: [], diaryLastDoc: null, diaryHasMore: true, diaryLoading: false,
   weightPoints: null,
   modal: null, modalSub: {}, modalPhoto: null,
+  toast: null,
 };
 
 /* ================= data loading ================= */
@@ -283,6 +383,8 @@ async function loadHome(){
     state.homeRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
     const upSnap = await upcomingRef().get();
     state.homeUpcoming = upSnap.docs.map(d=>({type:d.id, ...d.data()}));
+    const evSnap = await eventsRef().get();
+    state.homeEvents = evSnap.docs.map(d=>({id:d.id, ...d.data()}));
   }catch(e){ console.error("loadHome error", e); }
   state.homeLoading = false; render();
 }
@@ -304,6 +406,45 @@ async function loadMoreHistory(){
   state.historyLastDoc = snap.docs[snap.docs.length-1] || null;
   state.historyHasMore = snap.docs.length === 30;
   state.historyLoading = false; render();
+}
+async function loadStatsForPeriod(days){
+  state.statsPeriod = days;
+  state.stats = null; render();
+  try{
+    const startISO = new Date(Date.now() - days*86400000).toISOString();
+    const snap = await recordsRef().where("datetime", ">=", startISO).get();
+    const recs = snap.docs.map(d=>d.data());
+    const pee = recs.filter(r=>r.type==="pee");
+    const poop = recs.filter(r=>r.type==="poop");
+    const goodCount = arr => arr.filter(r=>r.status!=="bad").length;
+    const rate = arr => arr.length ? Math.round(100*goodCount(arr)/arr.length) : null;
+    state.stats = {
+      peeRate: rate(pee), poopRate: rate(poop),
+      peeCount: pee.length, poopCount: poop.length,
+      peeGood: goodCount(pee), poopGood: goodCount(poop),
+    };
+  }catch(e){
+    console.error("loadStats error", e);
+    state.stats = { peeRate:null, poopRate:null, peeCount:0, poopCount:0, peeGood:0, poopGood:0 };
+  }
+  render();
+}
+async function loadCalendarMonth(){
+  state.calendarLoading = true; render();
+  const { y, m } = state.calendarMonth;
+  const startISO = new Date(y, m-1, 1).toISOString();
+  const endISO = new Date(y, m, 1).toISOString();
+  try{
+    const snap = await recordsRef().where("datetime", ">=", startISO).where("datetime", "<", endISO).get();
+    state.calendarRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
+  }catch(e){ console.error("loadCalendarMonth records error", e); state.calendarRecords = []; }
+  try{
+    const evSnap = await eventsRef().get();
+    const all = evSnap.docs.map(d=>({id:d.id, ...d.data()}));
+    const mk = `${y}-${String(m).padStart(2,"0")}`;
+    state.calendarEvents = all.filter(ev => ev.date && ev.date.slice(0,7) === mk);
+  }catch(e){ console.error("loadCalendarMonth events error", e); state.calendarEvents = []; }
+  state.calendarLoading = false; render();
 }
 async function loadWeight(){
   state.weightPoints = null; render();
@@ -367,31 +508,40 @@ async function submitPetSetup(){
   if(!name){ document.getElementById("pet-err").textContent = "名前を入力してください"; return; }
   const species = state.tmpSpecies || "dog";
   const gender = state.tmpGender || "unknown";
+  const neuter = state.tmpNeuter || "unknown";
   const breed = document.getElementById("pet-breed").value.trim();
+  const color = document.getElementById("pet-color").value.trim();
   const birthday = document.getElementById("pet-birthday").value;
   const photo = state.tmpPetPhoto || null;
-  const pet = { name, species, gender, breed, birthday, photo, createdAt: new Date().toISOString() };
+  const pet = { name, species, gender, neuter, breed, color, birthday, photo, createdAt: new Date().toISOString() };
   await groupRef().set(pet, { merge: true });
   state.pet = pet;
   state.tab = "home";
   render();
   loadHome();
+  showToast("ペット情報を登録しました");
 }
 
 /* ================= quick logging (instant, no modal) ================= */
 async function quickLog(catKey, extra){
   const rec = { type:catKey, datetime:new Date().toISOString(), memo:"", author:getMyName(), createdAt:new Date().toISOString(), ...extra };
-  await recordsRef().add(rec);
-  if(state.tab === "home") loadHome();
-  if(state.tab === "history") loadHistory();
+  const docRef = await recordsRef().add(rec);
+  const meta = ALL_TYPE_META[catKey] || { label: catKey };
+  const label = `${meta.label}${statusParenLabel(catKey, rec.status)}を記録しました`;
+  showToast(label, async () => {
+    await recordsRef().doc(docRef.id).delete();
+    showToast("取り消しました");
+    refreshRecordViews();
+  });
+  refreshRecordViews();
 }
 
-/* ================= modal (detail form) ================= */
-function openRecordModal(catKey, editRecord){
-  state.modal = { type:"record", catKey, editRecord: editRecord || null };
+/* ================= record modal (detail form, create & edit) ================= */
+function openRecordModal(catKey, editRecord, presetDay){
+  state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null };
   state.modalSub = {
     amount: (editRecord && editRecord.amount) || "ふつう",
-    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "",
+    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "good",
     condition: (editRecord && editRecord.condition) || "元気",
   };
   render();
@@ -402,11 +552,21 @@ function openDiaryModal(editEntry){
   state.modalSub = { mood: (editEntry && editEntry.mood) || "元気" };
   render();
 }
+function openEventModal(day, editEventId){
+  const editEvent = editEventId ? (state.calendarEvents.find(e=>e.id===editEventId) || state.homeEvents.find(e=>e.id===editEventId)) : null;
+  state.modal = { type:"event", day: editEvent ? editEvent.date : day, editEvent: editEvent || null };
+  state.modalSub = { eventType: (editEvent && editEvent.type) || "hospital" };
+  render();
+}
+function openPastRecordPicker(day){
+  state.modal = { type:"pickCategory", day };
+  render();
+}
 function closeModal(){ state.modal = null; render(); }
 function setModalSub(field, value){ state.modalSub[field] = value; render(); }
 
 function findRecordById(id){
-  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || null;
+  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || null;
 }
 function openEditRecordById(id){
   const r = findRecordById(id);
@@ -444,11 +604,15 @@ async function saveRecordFromModal(){
 
   const btn = document.getElementById("rf-submit");
   btn.disabled = true; btn.textContent = "保存中…";
+  const prevData = editRecord ? { ...editRecord } : null;
+  if(prevData) delete prevData.id;
   try{
+    let newId = null;
     if(editRecord){
       await recordsRef().doc(editRecord.id).update(rec);
     } else {
-      await recordsRef().add(rec);
+      const docRef = await recordsRef().add(rec);
+      newId = docRef.id;
     }
     if(catKey === "hospital" && rec.nextVisit){ await upcomingRef().doc("hospital").set({ label:"通院", date: rec.nextVisit, memo: rec.memo }); }
     if(catKey === "trimming" && rec.nextDate){ await upcomingRef().doc("trimming").set({ label:"トリミング", date: rec.nextDate, memo: rec.memo }); }
@@ -463,9 +627,22 @@ async function saveRecordFromModal(){
       });
     }
     closeModal();
-    if(state.tab === "home") loadHome();
-    if(state.tab === "history") loadHistory();
-    if(state.tab === "weight") loadWeight();
+    const cat = CAT_BY_KEY[catKey] || PREV_BY_KEY[catKey];
+    const statusPart = statusParenLabel(catKey, rec.status);
+    if(editRecord){
+      showToast(`${cat.label}${statusPart}を更新しました`, async () => {
+        await recordsRef().doc(editRecord.id).set(prevData);
+        showToast("取り消しました");
+        refreshRecordViews();
+      });
+    } else {
+      showToast(`${cat.label}${statusPart}を記録しました`, async () => {
+        await recordsRef().doc(newId).delete();
+        showToast("取り消しました");
+        refreshRecordViews();
+      });
+    }
+    refreshRecordViews();
   }catch(e){
     document.getElementById("rf-err").textContent = "保存できませんでした。通信状況を確認してください。";
     btn.disabled = false; btn.textContent = editRecord ? "保存する" : "記録する";
@@ -475,13 +652,20 @@ async function saveRecordFromModal(){
 async function deleteRecordFromModal(){
   const editRecord = state.modal.editRecord;
   if(!editRecord) return;
-  if(!confirm("この記録を削除しますか？元に戻せません。")) return;
+  if(!confirm("この記録を削除しますか？")) return;
+  const prevData = { ...editRecord };
+  delete prevData.id;
   try{
     await recordsRef().doc(editRecord.id).delete();
     closeModal();
-    if(state.tab === "home") loadHome();
-    if(state.tab === "history") loadHistory();
-    if(state.tab === "weight") loadWeight();
+    const meta = ALL_TYPE_META[editRecord.type] || { label: editRecord.type };
+    const statusPart = statusParenLabel(editRecord.type, editRecord.status);
+    showToast(`${meta.label}${statusPart}を削除しました`, async () => {
+      await recordsRef().add(prevData);
+      showToast("取り消しました");
+      refreshRecordViews();
+    });
+    refreshRecordViews();
   }catch(e){
     alert("削除できませんでした。通信状況を確認してください。");
   }
@@ -508,16 +692,33 @@ async function saveDiaryFromModal(){
   const entry = { date: new Date(date).toISOString(), caption, mood, photo: state.modalPhoto || null };
   const btn = document.getElementById("df-submit");
   btn.disabled = true; btn.textContent = "保存中…";
+  const prevData = editEntry ? { ...editEntry } : null;
+  if(prevData) delete prevData.id;
   try{
+    let newId = null;
     if(editEntry){
       await diaryRef().doc(editEntry.id).update(entry);
     } else {
       entry.author = getMyName();
       entry.createdAt = new Date().toISOString();
-      await diaryRef().add(entry);
+      const docRef = await diaryRef().add(entry);
+      newId = docRef.id;
     }
     closeModal();
-    if(state.tab === "diary") loadDiary();
+    if(editEntry){
+      showToast("日記を更新しました", async () => {
+        await diaryRef().doc(editEntry.id).set(prevData);
+        showToast("取り消しました");
+        if(state.historySubTab === "memories") loadDiary();
+      });
+    } else {
+      showToast("日記を保存しました", async () => {
+        await diaryRef().doc(newId).delete();
+        showToast("取り消しました");
+        if(state.historySubTab === "memories") loadDiary();
+      });
+    }
+    if(state.tab === "history" && state.historySubTab === "memories") loadDiary();
   }catch(e){
     document.getElementById("df-err").textContent = "保存できませんでした。写真が大きすぎる場合は別の写真でお試しください。";
     btn.disabled = false; btn.textContent = "残す";
@@ -526,11 +727,18 @@ async function saveDiaryFromModal(){
 async function deleteDiaryFromModal(){
   const editEntry = state.modal.editEntry;
   if(!editEntry) return;
-  if(!confirm("この日記を削除しますか？元に戻せません。")) return;
+  if(!confirm("この日記を削除しますか？")) return;
+  const prevData = { ...editEntry };
+  delete prevData.id;
   try{
     await diaryRef().doc(editEntry.id).delete();
     closeModal();
-    if(state.tab === "diary") loadDiary();
+    showToast("日記を削除しました", async () => {
+      await diaryRef().add(prevData);
+      showToast("取り消しました");
+      if(state.historySubTab === "memories") loadDiary();
+    });
+    if(state.tab === "history" && state.historySubTab === "memories") loadDiary();
   }catch(e){
     alert("削除できませんでした。通信状況を確認してください。");
   }
@@ -540,33 +748,125 @@ function openDiaryEdit(id){
   if(e) openDiaryModal(e);
 }
 
+/* ================= event (schedule) actions ================= */
+async function saveEventFromModal(){
+  const editEvent = state.modal.editEvent;
+  const date = document.getElementById("ev-date").value;
+  const time = document.getElementById("ev-time").value;
+  const memo = document.getElementById("ev-memo").value.trim();
+  const notify = document.getElementById("ev-notify").checked;
+  const type = state.modalSub.eventType;
+  if(!date){ document.getElementById("ev-err").textContent = "日付を入力してください"; return; }
+  const ev = { type, date, time, memo, notify };
+  const btn = document.getElementById("ev-submit");
+  btn.disabled = true; btn.textContent = "保存中…";
+  const prevData = editEvent ? { ...editEvent } : null;
+  if(prevData) delete prevData.id;
+  try{
+    let newId = null;
+    if(editEvent){
+      await eventsRef().doc(editEvent.id).update(ev);
+    } else {
+      ev.createdAt = new Date().toISOString();
+      const docRef = await eventsRef().add(ev);
+      newId = docRef.id;
+    }
+    closeModal();
+    const refreshEvents = () => { if(state.historySubTab==="calendar") loadCalendarMonth(); if(state.tab==="home") loadHome(); };
+    if(editEvent){
+      showToast("予定を更新しました", async () => {
+        await eventsRef().doc(editEvent.id).set(prevData);
+        showToast("取り消しました");
+        refreshEvents();
+      });
+    } else {
+      showToast("予定を追加しました", async () => {
+        await eventsRef().doc(newId).delete();
+        showToast("取り消しました");
+        refreshEvents();
+      });
+    }
+    if(state.tab === "history" && state.historySubTab === "calendar") loadCalendarMonth();
+    if(state.tab === "home") loadHome();
+  }catch(e){
+    document.getElementById("ev-err").textContent = "保存できませんでした。通信状況を確認してください。";
+    btn.disabled = false; btn.textContent = editEvent ? "保存する" : "保存";
+  }
+}
+async function deleteEventFromModal(){
+  const editEvent = state.modal.editEvent;
+  if(!editEvent) return;
+  if(!confirm("この予定を削除しますか？")) return;
+  const prevData = { ...editEvent };
+  delete prevData.id;
+  try{
+    await eventsRef().doc(editEvent.id).delete();
+    closeModal();
+    showToast("予定を削除しました", async () => {
+      await eventsRef().add(prevData);
+      showToast("取り消しました");
+      if(state.historySubTab==="calendar") loadCalendarMonth();
+      if(state.tab==="home") loadHome();
+    });
+    if(state.tab === "history" && state.historySubTab === "calendar") loadCalendarMonth();
+    if(state.tab === "home") loadHome();
+  }catch(e){
+    alert("削除できませんでした。通信状況を確認してください。");
+  }
+}
+
 /* ================= settings actions ================= */
 async function saveMyNameSetting(){
   const name = document.getElementById("set-myname").value.trim();
   setMyName(name);
   render();
+  showToast("保存しました");
 }
 async function savePetSettings(){
   const name = document.getElementById("set-pet-name").value.trim() || state.pet.name;
   const species = state.tmpSpecies || state.pet.species;
   const gender = state.tmpGender || state.pet.gender;
+  const neuter = state.tmpNeuter || state.pet.neuter || "unknown";
   const breed = document.getElementById("set-pet-breed").value.trim();
+  const color = document.getElementById("set-pet-color").value.trim();
   const birthday = document.getElementById("set-pet-birthday").value;
   const photo = state.tmpPetPhoto !== undefined ? state.tmpPetPhoto : (state.pet.photo || null);
-  const updated = { ...state.pet, name, species, gender, breed, birthday, photo };
+  const updated = { ...state.pet, name, species, gender, neuter, breed, color, birthday, photo };
   await groupRef().set(updated, { merge: true });
   state.pet = updated;
   render();
+  showToast("ペット情報を保存しました");
 }
 
 function switchTab(tab){
   state.tab = tab; state.modal = null;
   render();
   if(tab === "home") loadHome();
-  if(tab === "history") loadHistory();
+  if(tab === "history"){
+    if(state.historySubTab === "calendar") loadCalendarMonth();
+    else if(state.historySubTab === "memories") loadDiary();
+    else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
+  }
   if(tab === "weight") loadWeight();
-  if(tab === "diary") loadDiary();
 }
+function switchHistorySubTab(sub){
+  state.historySubTab = sub;
+  render();
+  if(sub === "calendar") loadCalendarMonth();
+  else if(sub === "memories") loadDiary();
+  else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
+}
+function setStatsPeriod(days){ loadStatsForPeriod(days); }
+function changeCalendarMonth(delta){
+  let { y, m } = state.calendarMonth;
+  m += delta;
+  if(m < 1){ m = 12; y--; }
+  if(m > 12){ m = 1; y++; }
+  state.calendarMonth = { y, m };
+  state.calendarSelectedDay = `${y}-${String(m).padStart(2,"0")}-01`;
+  loadCalendarMonth();
+}
+function selectCalendarDay(dateStr){ state.calendarSelectedDay = dateStr; render(); }
 
 /* ================= chart ================= */
 let weightChartInstance = null;
@@ -611,7 +911,12 @@ function renderHome(){
   const lastByType = {};
   state.homeRecords.forEach(r => { if(!lastByType[r.type]) lastByType[r.type] = r; });
 
-  const upcomingSoon = (state.homeUpcoming||[]).filter(u=>{
+  const autoUpcoming = (state.homeUpcoming||[]).map(u => ({ label:u.label, date:u.date, memo:u.memo, source:"auto" }));
+  const manualUpcoming = (state.homeEvents||[]).map(e => {
+    const meta = EVENT_TYPE_BY_KEY[e.type] || { label:e.type };
+    return { label: meta.label, date: e.date, memo: e.memo, source:"event", id:e.id };
+  });
+  const upcomingSoon = [...autoUpcoming, ...manualUpcoming].filter(u=>{
     const diff = (new Date(u.date) - new Date())/86400000;
     return diff <= 14;
   }).sort((a,b)=> new Date(a.date)-new Date(b.date));
@@ -621,7 +926,7 @@ function renderHome(){
   <div class="card" style="padding:14px 16px;margin-bottom:14px;background:var(--amber);">
     <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--amberText);">次回の予定</div>
     ${upcomingSoon.map(u=>`
-      <div style="font-size:13px;color:var(--amberText);display:flex;justify-content:space-between;">
+      <div onclick="${u.source==='event'?`openEventModal(${JSON.stringify(u.date)},${JSON.stringify(u.id)})`:''}" style="font-size:13px;color:var(--amberText);display:flex;justify-content:space-between;${u.source==='event'?'cursor:pointer;':''}">
         <span>${esc(u.label)}${u.memo?`・${esc(u.memo)}`:""}</span>
         <span class="mono">${esc(u.date)}</span>
       </div>`).join("")}
@@ -629,8 +934,11 @@ function renderHome(){
 
   <div class="card" style="padding:18px;margin-bottom:14px;">
     <div style="display:flex;align-items:center;gap:14px;">
-      <div style="width:64px;height:64px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:32px;flex-shrink:0;overflow:hidden;">
-        ${pet.photo ? `<img src="${pet.photo}" style="width:100%;height:100%;object-fit:cover;">` : emoji}
+      <div style="position:relative;flex-shrink:0;">
+        <div style="width:64px;height:64px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:32px;overflow:hidden;">
+          ${pet.photo ? `<img src="${pet.photo}" style="width:100%;height:100%;object-fit:cover;">` : emoji}
+        </div>
+        <button onclick="openPetEdit()" style="position:absolute;bottom:-2px;right:-2px;width:23px;height:23px;border-radius:50%;background:var(--coral);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;padding:0;color:#fff;">📷</button>
       </div>
       <div style="flex:1;min-width:0;">
         <div class="display" style="font-weight:700;font-size:22px;">${esc(pet.name)}</div>
@@ -639,15 +947,23 @@ function renderHome(){
           ${genderLabel ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:4px 11px;font-size:12px;">${genderLabel}</span>` : ""}
         </div>
       </div>
-      <button class="toppill" onclick="openPetEdit()">✏️</button>
     </div>
+
+    <button onclick="state.petDetailOpen=!state.petDetailOpen;render();" style="display:flex;align-items:center;gap:4px;background:none;border:none;color:var(--inkSoft);font-size:12.5px;margin-top:12px;cursor:pointer;padding:0;">
+      詳細 <span>${state.petDetailOpen?'︿':'﹀'}</span>
+    </button>
+    ${state.petDetailOpen ? `
+    <div class="chip-row" style="margin-top:10px;">
+      ${pet.breed ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">🐾 ${esc(pet.breed)}</span>` : ""}
+      ${pet.color ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">毛色 ${esc(pet.color)}</span>` : ""}
+      <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">避妊・去勢 ${pet.neuter==='done'?'済':pet.neuter==='not'?'未':'不明'}</span>
+    </div>` : ""}
+
     ${age ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
-      <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
-        <div><span class="mono" style="font-size:26px;font-weight:600;">${age.days}</span><span style="font-size:12px;color:var(--inkSoft);"> 日 生後</span></div>
-        <div style="font-size:12.5px;color:var(--inkSoft);">${age.years>0?`${age.years}歳${age.months}ヶ月`:`生後${age.months}ヶ月`} ・ <span style="background:var(--chip);color:var(--chipText);padding:2px 9px;border-radius:999px;">${age.stage}</span></div>
-      </div>
-      ${human ? `<div style="font-size:12px;color:var(--inkSoft);margin-top:8px;">🐾 人間換算で目安 約 <span class="mono" style="font-weight:600;color:var(--ink);">${human}歳</span>（簡易的な推定です）</div>` : ""}
+      <div><span class="mono" style="font-size:26px;font-weight:600;">${age.days}</span><span style="font-size:12px;color:var(--inkSoft);"> 日 生後</span></div>
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-top:4px;">${age.years>0?`${age.years}歳${age.months}ヶ月`:`生後${age.months}ヶ月`}${human?` ・ 人間${human}歳`:""} ・ <span style="background:var(--chip);color:var(--chipText);padding:2px 9px;border-radius:999px;">${age.stage}</span></div>
+      ${human ? `<div style="font-size:10.5px;color:var(--inkSoft);margin-top:4px;">※人間換算年齢は簡易的な目安です</div>` : ""}
     </div>` : ""}
   </div>
 
@@ -736,8 +1052,43 @@ function renderHealthSection(lastByType){
 
 function openPetEdit(){ state.tab = "settings"; state.modal=null; render(); }
 
-/* ================= HISTORY (full past records, tap to edit) ================= */
+/* ================= HISTORY (list / calendar / memories) ================= */
 function renderHistory(){
+  const sub = state.historySubTab || "list";
+  return `
+  <div class="display" style="font-weight:700;font-size:19px;margin-bottom:12px;">きろく</div>
+  <div class="subtab-wrap">
+    <button class="subtab-btn ${sub==='list'?'active':''}" onclick="switchHistorySubTab('list')">リスト</button>
+    <button class="subtab-btn ${sub==='calendar'?'active':''}" onclick="switchHistorySubTab('calendar')">カレンダー</button>
+    <button class="subtab-btn ${sub==='memories'?'active':''}" onclick="switchHistorySubTab('memories')">おもいで</button>
+  </div>
+  ${sub==='list' ? renderHistoryList() : sub==='calendar' ? renderHistoryCalendar() : renderDiary()}
+  `;
+}
+
+function renderHistoryList(){
+  const stats = state.stats;
+  const statsBlock = `
+  <div class="chip-row" style="margin-bottom:12px;">
+    ${[7,14,30].map(d=>`<button class="chip ${state.statsPeriod===d?'active':''}" onclick="setStatsPeriod(${d})">${d}日</button>`).join("")}
+  </div>
+  <div style="display:flex;gap:10px;margin-bottom:18px;">
+    <div class="card" style="flex:1;padding:14px 16px;">
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:6px;">おしっこ成功率</div>
+      <div style="display:flex;align-items:baseline;gap:6px;">
+        <span class="mono" style="font-size:24px;font-weight:600;">${!stats ? "…" : (stats.peeRate===null?"-":stats.peeRate+"%")}</span>
+        ${stats && stats.peeCount>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${stats.peeGood}/${stats.peeCount}回)</span>` : ""}
+      </div>
+    </div>
+    <div class="card" style="flex:1;padding:14px 16px;">
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:6px;">うんち成功率</div>
+      <div style="display:flex;align-items:baseline;gap:6px;">
+        <span class="mono" style="font-size:24px;font-weight:600;">${!stats ? "…" : (stats.poopRate===null?"-":stats.poopRate+"%")}</span>
+        ${stats && stats.poopCount>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${stats.poopGood}/${stats.poopCount}回)</span>` : ""}
+      </div>
+    </div>
+  </div>`;
+
   const grouped = {};
   state.historyRecords.forEach(r => {
     const day = (r.datetime||"").slice(0,10);
@@ -745,32 +1096,444 @@ function renderHistory(){
     grouped[day].push(r);
   });
   const dayKeys = Object.keys(grouped).sort().reverse();
-  return `
-  <div class="display" style="font-weight:700;font-size:19px;margin-bottom:12px;">きろく</div>
-  ${state.historyLoading && state.historyRecords.length===0 ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
+
+  return statsBlock + (
+    state.historyLoading && state.historyRecords.length===0 ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
     dayKeys.length===0 ? `<div style="text-align:center;padding:40px 20px;color:var(--inkSoft);font-size:13.5px;">まだ記録がありません。</div>` :
     dayKeys.map(day => `
       <div style="margin-bottom:16px;">
         <div class="mono" style="font-size:12px;color:var(--inkSoft);margin-bottom:6px;">${fmtDateHeading(day)}</div>
         <div class="card" style="overflow:hidden;">
-          ${grouped[day].map((r,i)=>{
-            const meta = ALL_TYPE_META[r.type] || {emoji:"📝"};
-            return `
-            <div onclick='openEditRecordById(${JSON.stringify(r.id)})' style="display:flex;gap:10px;padding:11px 14px;${i>0?'border-top:1px solid var(--line);':''}align-items:flex-start;cursor:pointer;">
-              <div class="mono" style="font-size:12.5px;color:var(--inkSoft);min-width:40px;padding-top:2px;">${fmtTime(r.datetime)}</div>
-              <div style="padding-top:1px;font-size:17px;">${meta.emoji}</div>
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13.5px;line-height:1.4;">${esc(summarizeRecord(r))}</div>
-                ${r.author ? `<div class="mono" style="font-size:10.5px;color:var(--inkSoft);margin-top:2px;">${esc(r.author)}</div>` : ""}
-              </div>
-            </div>`;
-          }).join("")}
+          ${grouped[day].map((r,i)=> renderRecordRow(r, {divider: i>0})).join("")}
+        </div>
+      </div>`).join("")
+  ) + (state.historyHasMore ? `<button onclick="loadMoreHistory()" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : "")
+    + `<div style="font-size:11.5px;color:var(--inkSoft);text-align:center;margin-top:10px;">記録をタップすると編集・削除できます</div>`;
+}
+
+function renderHistoryCalendar(){
+  const { y, m } = state.calendarMonth;
+  const firstDay = new Date(y, m-1, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const todayStr = new Date().toISOString().slice(0,10);
+
+  const dayHasData = {};
+  state.calendarRecords.forEach(r => { dayHasData[r.datetime.slice(0,10)] = true; });
+  state.calendarEvents.forEach(e => { dayHasData[e.date] = true; });
+
+  const weekLabels = ["日","月","火","水","木","金","土"];
+  let cells = [];
+  for(let i=0;i<startWeekday;i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(d);
+
+  const grid = `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+    <button onclick="changeCalendarMonth(-1)" class="toppill">‹</button>
+    <div class="display" style="font-weight:700;font-size:17px;">${y}年${m}月</div>
+    <button onclick="changeCalendarMonth(1)" class="toppill">›</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+    ${weekLabels.map((w,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'var(--coral)':i===6?'var(--chipText)':'var(--inkSoft)'};font-weight:600;">${w}</div>`).join("")}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:18px;">
+    ${cells.map(d=>{
+      if(d===null) return `<div></div>`;
+      const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const isToday = dateStr===todayStr;
+      const isSelected = dateStr===state.calendarSelectedDay;
+      const hasData = !!dayHasData[dateStr];
+      return `
+      <button onclick="selectCalendarDay('${dateStr}')" style="aspect-ratio:1/1;border-radius:10px;border:${isSelected?'2px solid var(--coral)':'1px solid transparent'};background:${isSelected?'var(--coralSoft)':'var(--card)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+        <span style="font-size:13px;color:${isToday?'var(--coral)':'var(--ink)'};font-weight:${isToday?'700':'400'};">${d}</span>
+        ${hasData?`<span style="width:5px;height:5px;border-radius:50%;background:var(--coral);margin-top:2px;"></span>`:""}
+      </button>`;
+    }).join("")}
+  </div>`;
+
+  return (state.calendarLoading ? `<div style="text-align:center;padding:20px;"><span class="spin">⏳</span></div>` : "") + grid + renderCalendarDayPanel();
+}
+
+function renderCalendarDayPanel(){
+  const day = state.calendarSelectedDay;
+  const dayRecords = state.calendarRecords.filter(r=>r.datetime.slice(0,10)===day).sort((a,b)=> a.datetime.localeCompare(b.datetime));
+  const dayEvents = state.calendarEvents.filter(e=>e.date===day);
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
+    <div style="font-weight:700;font-size:15px;">${fmtDateHeading(day+"T00:00:00")}</div>
+    <button class="row-btn" onclick="openEventModal('${day}')">📅 予定を追加</button>
+  </div>
+  ${dayEvents.map(ev=>{
+    const meta = EVENT_TYPE_BY_KEY[ev.type] || { emoji:"🗓️", label: ev.type };
+    return `
+    <div class="card" onclick='openEventModal(${JSON.stringify(day)}, ${JSON.stringify(ev.id)})' style="display:flex;gap:10px;padding:12px 14px;margin-bottom:8px;cursor:pointer;align-items:center;background:var(--cardSoft);">
+      <span style="font-size:18px;">${meta.emoji}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">${esc(meta.label)}${ev.time?` ・ ${esc(ev.time)}`:""}</div>
+        ${ev.memo?`<div style="font-size:12px;color:var(--inkSoft);">${esc(ev.memo)}</div>`:""}
+      </div>
+    </div>`;
+  }).join("")}
+  ${dayRecords.length===0 && dayEvents.length===0 ? `<div style="text-align:center;padding:16px;color:var(--inkSoft);font-size:13px;">この日の記録はありません</div>` : ""}
+  <div class="card" style="overflow:hidden;${dayRecords.length? 'margin-bottom:8px;':''}">
+    ${dayRecords.map((r,i)=> renderRecordRow(r, {divider: i>0})).join("")}
+  </div>
+  <button onclick="openPastRecordPicker('${day}')" style="width:100%;padding:11px;margin-top:6px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">＋ 過去の記録を追加</button>
+  `;
+}
+
+/* ================= DIARY / おもいで (list with date + author, tap to edit) ================= */
+function renderDiary(){
+  return `
+  <button onclick="openDiaryModal()" style="width:100%;padding:13px;margin-bottom:14px;border-radius:14px;border:1.5px dashed var(--coral);background:#fff;color:var(--coralDeep);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+    📷 今日の一枚を残す
+  </button>
+  ${state.diaryLoading && state.diary.length===0 ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
+    state.diary.length===0 ? `<div style="text-align:center;padding:30px 20px;color:var(--inkSoft);font-size:13.5px;">まだ日記がありません。</div>` :
+    state.diary.map(e => `
+      <div class="card" onclick='openDiaryEdit(${JSON.stringify(e.id)})' style="display:flex;gap:12px;padding:12px;margin-bottom:10px;cursor:pointer;align-items:center;">
+        <div style="width:56px;height:56px;border-radius:12px;overflow:hidden;background:var(--cardSoft);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;">
+          ${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;">` : (e.mood==="元気"?"😊":e.mood==="不調"?"😟":"😐")}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;font-size:14px;">${fmtDateHeading(e.date)}</div>
+          <div style="font-size:12px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.caption?esc(e.caption):(e.mood||"")}</div>
+          ${e.author ? `<div class="mono" style="font-size:10.5px;color:var(--inkSoft);margin-top:2px;">${esc(e.author)}</div>` : ""}
         </div>
       </div>`).join("")
   }
-  ${state.historyHasMore ? `<button onclick="loadMoreHistory()" style="width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : ""}
-  <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;margin-top:10px;">記録をタップすると編集・削除できます</div>
+  ${state.diaryHasMore ? `<button onclick="loadMoreDiary()" style="width:100%;padding:11px;margin-top:14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : ""}
   `;
+}
+
+/* ================= SETTINGS ================= */
+function renderSettings(){
+  const pet = state.pet;
+  if(state.tmpSpecies === undefined) state.tmpSpecies = pet.species;
+  if(state.tmpGender === undefined) state.tmpGender = pet.gender || "unknown";
+  if(state.tmpNeuter === undefined) state.tmpNeuter = pet.neuter || "unknown";
+  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = pet.photo || null;
+  return `
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">あなた</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <label class="field"><div class="field-label">表示名（記録に表示されます・任意）</div><input id="set-myname" value="${esc(getMyName())}" placeholder="例：太郎"></label>
+    <button class="btn-primary" onclick="saveMyNameSetting()">保存</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">セキュリティ</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
+    </div>
+    <button class="btn-danger" onclick="logout()">ログアウト</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="margin-bottom:14px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
+    <label class="field"><div class="field-label">名前</div><input id="set-pet-name" value="${esc(pet.name)}"></label>
+    <div class="field">
+      <div class="field-label">種類</div>
+      <div class="chip-row">
+        <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
+        <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
+        <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
+      </div>
+    </div>
+    <div class="field">
+      <div class="field-label">性別</div>
+      <div class="chip-row">
+        <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
+        <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
+        <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
+      </div>
+    </div>
+    <label class="field"><div class="field-label">犬種・猫種</div><input id="set-pet-breed" value="${esc(pet.breed||"")}"></label>
+    <label class="field"><div class="field-label">毛色</div><input id="set-pet-color" value="${esc(pet.color||"")}" placeholder="例：レッドホワイト"></label>
+    <div class="field">
+      <div class="field-label">避妊・去勢</div>
+      <div class="chip-row">
+        <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="state.tmpNeuter='done';render()">済</button>
+        <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="state.tmpNeuter='not';render()">未</button>
+        <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="state.tmpNeuter='unknown';render()">不明</button>
+      </div>
+    </div>
+    <label class="field"><div class="field-label">お誕生日</div><input id="set-pet-birthday" type="date" value="${esc(pet.birthday||"")}"></label>
+    <button class="btn-primary" onclick="savePetSettings()">保存</button>
+  </div>
+
+  <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;line-height:1.7;">
+    記録は自動的に消えません。ふたりでずっと残していけます。<br>
+    ※人間換算年齢・年齢の表示は簡易的な目安です。
+  </div>`;
+}
+
+/* ================= modals ================= */
+function renderModal(){
+  if(!state.modal) return "";
+  if(state.modal.type === "record") return renderRecordModal();
+  if(state.modal.type === "diary") return renderDiaryModal();
+  if(state.modal.type === "event") return renderEventModal();
+  if(state.modal.type === "pickCategory") return renderPickCategoryModal();
+  return "";
+}
+function chipField(label, options, current, subKey){
+  return `<div class="field"><div class="field-label">${label}</div><div class="chip-row">
+    ${options.map(o=>`<button class="chip ${current===o?'active':''}" onclick="setModalSub('${subKey}','${o}')">${o}</button>`).join("")}
+  </div></div>`;
+}
+function renderRecordModal(){
+  const catKey = state.modal.catKey;
+  const editRecord = state.modal.editRecord;
+  const cat = CAT_BY_KEY[catKey] || PREV_BY_KEY[catKey];
+  const sub = state.modalSub;
+  let fields = "";
+  if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
+  else if(catKey === "water"){ fields = chipField("量の目安", ["少なめ","ふつう","多め"], sub.amount, "amount"); }
+  else if(catKey === "pee" || catKey === "poop"){
+    fields = `<div class="field"><div class="field-label">様子</div><div class="chip-row">
+      <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+      <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
+    </div></div>`;
+  } else if(catKey === "weight"){
+    fields = `<label class="field"><div class="field-label">体重（kg）</div><input id="rf-weight" type="number" step="0.01" placeholder="例：4.20" value="${editRecord?editRecord.value:''}"></label>`;
+  } else if(catKey === "health"){
+    fields = chipField("今日の様子", ["元気","普通","不調"], sub.condition, "condition");
+  } else if(catKey === "hospital"){
+    fields = `
+      <label class="field"><div class="field-label">内容・理由</div><input id="rf-reason" placeholder="例：定期健診" value="${esc(editRecord?editRecord.reason:'')}"></label>
+      <div class="field-row">
+        <label class="field"><div class="field-label">費用（円・任意）</div><input id="rf-cost" type="number" value="${editRecord&&editRecord.cost?editRecord.cost:''}"></label>
+        <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextvisit" type="date" value="${esc(editRecord?editRecord.nextVisit||'':'')}"></label>
+      </div>`;
+  } else if(catKey === "medication"){
+    fields = `<label class="field"><div class="field-label">薬の名前</div><input id="rf-medname" placeholder="例：フィラリア予防薬" value="${esc(editRecord?editRecord.name:'')}"></label>`;
+  } else if(catKey === "trimming"){
+    fields = `
+      <div class="field-row">
+        <label class="field"><div class="field-label">お店（任意）</div><input id="rf-shop" value="${esc(editRecord?editRecord.shop||'':'')}"></label>
+        <label class="field"><div class="field-label">担当者（任意）</div><input id="rf-staff" value="${esc(editRecord?editRecord.staff||'':'')}"></label>
+      </div>
+      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
+  }
+  const dtValue = editRecord ? toLocalInputValue(editRecord.datetime) : (state.modal.presetDay ? state.modal.presetDay+"T12:00" : nowLocalInput());
+  const memoValue = editRecord ? esc(editRecord.memo||"") : "";
+  return `
+  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を${editRecord?'編集':'記録'}</div>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <label class="field"><div class="field-label">日時</div><input id="rf-datetime" type="datetime-local" value="${dtValue}"></label>
+      ${fields}
+      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2">${memoValue}</textarea></label>
+      ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
+      <div id="rf-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="rf-submit" class="btn-primary" style="flex:1;" onclick="saveRecordFromModal()">${editRecord?'保存する':'記録する'}</button>
+        ${editRecord ? `<button class="btn-danger" onclick="deleteRecordFromModal()">削除</button>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+function renderDiaryModal(){
+  const e = state.modal.editEntry;
+  const dateVal = e ? e.date.slice(0,10) : nowLocalInput().slice(0,10);
+  const captionVal = e ? esc(e.caption||"") : "";
+  return `
+  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="display" style="font-weight:700;font-size:19px;">${e?'日記を編集':'今日の一枚'}</div>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <label class="field"><div class="field-label">日付</div><input id="df-date" type="date" value="${dateVal}"></label>
+      <div class="field">
+        <div class="field-label">写真（任意）</div>
+        <input type="file" accept="image/*" id="df-file" style="display:none" onchange="handleDiaryPhoto(this)">
+        <div id="df-photobox" onclick="document.getElementById('df-file').click()" style="display:flex;align-items:center;justify-content:center;min-height:110px;border-radius:12px;border:1.5px dashed var(--line);background:var(--bg);cursor:pointer;overflow:hidden;">
+          ${state.modalPhoto ? `<img src="${state.modalPhoto}" style="width:100%;border-radius:10px;display:block;">` : `<span class="mono" style="font-size:13px;color:var(--inkSoft);">📷 写真を選ぶ</span>`}
+        </div>
+      </div>
+      ${chipField("今日の様子", ["元気","普通","不調"], state.modalSub.mood||"元気", "mood")}
+      <label class="field"><div class="field-label">一言（任意）</div><textarea id="df-caption" rows="2" placeholder="今日はお散歩でリスを追いかけました">${captionVal}</textarea></label>
+      <div id="df-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="df-submit" class="btn-primary" style="flex:1;" onclick="saveDiaryFromModal()">${e?'保存する':'残す'}</button>
+        ${e ? `<button class="btn-danger" onclick="deleteDiaryFromModal()">削除</button>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+function renderEventModal(){
+  const ev = state.modal.editEvent;
+  const day = state.modal.day || nowLocalInput().slice(0,10);
+  const type = state.modalSub.eventType;
+  return `
+  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div class="display" style="font-weight:700;font-size:19px;">📅 予定を${ev?'編集':'追加'}</div>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:14px;">通院・トリミングなど、これからの予定を登録できます。</div>
+      <div class="field">
+        <div class="field-label">種類</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+          ${EVENT_TYPES.map(t=>`
+          <button onclick="setModalSub('eventType','${t.key}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;border-radius:12px;border:${type===t.key?'2px solid var(--coral)':'1px solid var(--line)'};background:${type===t.key?'var(--coralSoft)':'var(--bg)'};cursor:pointer;">
+            <span style="font-size:19px;">${t.emoji}</span><span style="font-size:11.5px;">${t.label}</span>
+          </button>`).join("")}
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="field"><div class="field-label">日付</div><input id="ev-date" type="date" value="${ev?ev.date:day}"></label>
+        <label class="field"><div class="field-label">時刻（任意）</div><input id="ev-time" type="time" value="${ev?(ev.time||''):''}"></label>
+      </div>
+      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="ev-memo" rows="2" placeholder="例：予防接種の相談">${esc(ev?ev.memo||'':'')}</textarea></label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
+        <input id="ev-notify" type="checkbox" style="width:18px;height:18px;" ${ev?(ev.notify?'checked':''):'checked'}>
+        <span style="font-size:13px;">🔔 お知らせを受け取る</span>
+      </label>
+      <div style="font-size:11px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※このお知らせはアプリを開いている時のみ表示される簡易的なものです。オフでもホーム画面の「次回の予定」には表示されます。</div>
+      <div id="ev-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button id="ev-submit" class="btn-primary" style="flex:1;" onclick="saveEventFromModal()">${ev?'保存する':'保存'}</button>
+        ${ev ? `<button class="btn-danger" onclick="deleteEventFromModal()">削除</button>` : ""}
+      </div>
+    </div>
+  </div>`;
+}
+function renderPickCategoryModal(){
+  const day = state.modal.day;
+  return `
+  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="display" style="font-weight:700;font-size:19px;">何を記録しますか？</div>
+        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--inkSoft);margin-bottom:12px;">${fmtDateHeading(day+"T00:00:00")}の記録として追加します</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+        ${ALL_LOGGABLE.map(c=>`
+        <button onclick='closeModal();openRecordModal(${JSON.stringify(c.key)}, null, ${JSON.stringify(day)})' style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 4px;border-radius:12px;border:1px solid var(--line);background:var(--cardSoft);cursor:pointer;">
+          <span style="font-size:19px;">${c.emoji}</span><span style="font-size:11px;">${c.label}</span>
+        </button>`).join("")}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ================= pet setup screen (first run only) ================= */
+function renderPetSetup(){
+  if(state.tmpSpecies === undefined) state.tmpSpecies = "dog";
+  if(state.tmpGender === undefined) state.tmpGender = "unknown";
+  if(state.tmpNeuter === undefined) state.tmpNeuter = "unknown";
+  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = null;
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 20px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
+      <span style="font-size:24px;">🐾</span>
+    </div>
+    <div class="display" style="font-weight:700;font-size:20px;margin-bottom:4px;">この子のことを教えて</div>
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:22px;">あとから設定からいつでも変更できます</div>
+    <div class="card" style="width:100%;max-width:400px;padding:22px;">
+      <div style="margin-bottom:16px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
+      <label class="field"><div class="field-label">名前</div><input id="pet-name" placeholder="例：もふ"></label>
+      <div class="field">
+        <div class="field-label">種類</div>
+        <div class="chip-row">
+          <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
+          <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
+          <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="field-label">性別</div>
+        <div class="chip-row">
+          <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
+          <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
+          <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
+        </div>
+      </div>
+      <label class="field"><div class="field-label">犬種・猫種（任意）</div><input id="pet-breed" placeholder="例：トイプードル"></label>
+      <label class="field"><div class="field-label">毛色（任意）</div><input id="pet-color" placeholder="例：レッドホワイト"></label>
+      <div class="field">
+        <div class="field-label">避妊・去勢</div>
+        <div class="chip-row">
+          <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="state.tmpNeuter='done';render()">済</button>
+          <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="state.tmpNeuter='not';render()">未</button>
+          <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="state.tmpNeuter='unknown';render()">不明</button>
+        </div>
+      </div>
+      <label class="field"><div class="field-label">お誕生日（任意）</div><input id="pet-birthday" type="date"></label>
+      <div id="pet-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
+      <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="submitPetSetup()">はじめる</button>
+    </div>
+  </div>`;
+}
+
+/* ================= login screen ================= */
+function renderLogin(){
+  return `
+  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+    <div style="font-size:40px;margin-bottom:10px;">🐾</div>
+    <div class="display" style="font-weight:700;font-size:22px;margin-bottom:24px;">おかえりなさい</div>
+    <div class="card" style="width:100%;max-width:360px;padding:22px;">
+      <label class="field">
+        <div class="field-label">パスワード</div>
+        <input id="login-pw" type="password" onkeydown="if(event.key==='Enter') loginSubmit()" placeholder="••••••••">
+      </label>
+      <div id="login-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
+      <button id="login-btn" class="btn-primary" style="width:100%;" onclick="loginSubmit()">ログイン</button>
+    </div>
+  </div>`;
+}
+
+/* ================= master render ================= */
+const TABS = [
+  {key:"home", label:"ホーム", emoji:"🏠"},
+  {key:"history", label:"きろく", emoji:"📖"},
+  {key:"weight", label:"体重", emoji:"⚖️"},
+  {key:"settings", label:"設定", emoji:"⚙️"},
+];
+
+function render(){
+  const app = document.getElementById("app");
+  if(!authReady){
+    app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;"><span class="spin" style="font-size:24px;">⏳</span></div>`;
+    return;
+  }
+  if(!state.loggedIn){
+    app.innerHTML = renderLogin();
+    return;
+  }
+  if(!state.pet){
+    app.innerHTML = renderPetSetup();
+    return;
+  }
+
+  let body = "";
+  if(state.tab === "home") body = renderHome();
+  else if(state.tab === "history") body = renderHistory();
+  else if(state.tab === "weight") body = renderWeight();
+  else if(state.tab === "settings") body = renderSettings();
+
+  app.innerHTML = `
+    ${renderTopBar()}
+    <div style="padding:6px 14px 90px;">${body}</div>
+    <div class="tabbar">
+      ${TABS.map(t=>`
+        <button class="tabbtn ${state.tab===t.key?'active':''}" onclick="switchTab('${t.key}')">
+          <span style="font-size:19px;">${t.emoji}</span>
+          <span style="font-size:10.5px;">${t.label}</span>
+        </button>`).join("")}
+    </div>
+    ${renderModal()}
+    ${state.toast ? `<div class="toast">${esc(state.toast.message)}${state.toast.undo ? `<button class="toast-undo" onclick="runToastUndo()">取り消す</button>` : ""}</div>` : ""}
+  `;
+  if(state.tab === "weight") setTimeout(drawWeightChart, 30);
 }
 
 /* ================= WEIGHT ================= */
@@ -827,278 +1590,6 @@ function renderWeight(){
       `<canvas id="weight-canvas" height="220"></canvas>`
     }
   </div>`;
-}
-
-/* ================= DIARY (list with date + author, tap to edit) ================= */
-function renderDiary(){
-  return `
-  <button onclick="openDiaryModal()" style="width:100%;padding:13px;margin-bottom:14px;border-radius:14px;border:1.5px dashed var(--coral);background:#fff;color:var(--coralDeep);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
-    📷 今日の一枚を残す
-  </button>
-  ${state.diaryLoading && state.diary.length===0 ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
-    state.diary.length===0 ? `<div style="text-align:center;padding:30px 20px;color:var(--inkSoft);font-size:13.5px;">まだ日記がありません。</div>` :
-    state.diary.map(e => `
-      <div class="card" onclick='openDiaryEdit(${JSON.stringify(e.id)})' style="display:flex;gap:12px;padding:12px;margin-bottom:10px;cursor:pointer;align-items:center;">
-        <div style="width:56px;height:56px;border-radius:12px;overflow:hidden;background:var(--cardSoft);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:22px;">
-          ${e.photo ? `<img src="${e.photo}" style="width:100%;height:100%;object-fit:cover;">` : (e.mood==="元気"?"😊":e.mood==="不調"?"😟":"😐")}
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:14px;">${fmtDateHeading(e.date)}</div>
-          <div style="font-size:12px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.caption?esc(e.caption):(e.mood||"")}</div>
-          ${e.author ? `<div class="mono" style="font-size:10.5px;color:var(--inkSoft);margin-top:2px;">${esc(e.author)}</div>` : ""}
-        </div>
-      </div>`).join("")
-  }
-  ${state.diaryHasMore ? `<button onclick="loadMoreDiary()" style="width:100%;padding:11px;margin-top:14px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">もっと読み込む</button>` : ""}
-  `;
-}
-
-/* ================= SETTINGS ================= */
-function renderSettings(){
-  const pet = state.pet;
-  if(state.tmpSpecies === undefined) state.tmpSpecies = pet.species;
-  if(state.tmpGender === undefined) state.tmpGender = pet.gender || "unknown";
-  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = pet.photo || null;
-  return `
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">あなた</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
-    <label class="field"><div class="field-label">表示名（記録に表示されます・任意）</div><input id="set-myname" value="${esc(getMyName())}" placeholder="例：太郎"></label>
-    <button class="btn-primary" onclick="saveMyNameSetting()">保存</button>
-  </div>
-
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">セキュリティ</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
-    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
-      このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
-    </div>
-    <button class="btn-danger" onclick="logout()">ログアウト</button>
-  </div>
-
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
-    <div style="margin-bottom:14px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
-    <label class="field"><div class="field-label">名前</div><input id="set-pet-name" value="${esc(pet.name)}"></label>
-    <div class="field">
-      <div class="field-label">種類</div>
-      <div class="chip-row">
-        <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
-        <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
-        <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
-      </div>
-    </div>
-    <div class="field">
-      <div class="field-label">性別</div>
-      <div class="chip-row">
-        <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
-        <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
-        <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
-      </div>
-    </div>
-    <label class="field"><div class="field-label">犬種・猫種</div><input id="set-pet-breed" value="${esc(pet.breed||"")}"></label>
-    <label class="field"><div class="field-label">お誕生日</div><input id="set-pet-birthday" type="date" value="${esc(pet.birthday||"")}"></label>
-    <button class="btn-primary" onclick="savePetSettings()">保存</button>
-  </div>
-
-  <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;line-height:1.7;">
-    記録は自動的に消えません。ふたりでずっと残していけます。<br>
-    ※人間換算年齢・年齢の表示は簡易的な目安です。
-  </div>`;
-}
-
-/* ================= modals ================= */
-function renderModal(){
-  if(!state.modal) return "";
-  if(state.modal.type === "record") return renderRecordModal();
-  if(state.modal.type === "diary") return renderDiaryModal();
-  return "";
-}
-function chipField(label, options, current, subKey){
-  return `<div class="field"><div class="field-label">${label}</div><div class="chip-row">
-    ${options.map(o=>`<button class="chip ${current===o?'active':''}" onclick="setModalSub('${subKey}','${o}')">${o}</button>`).join("")}
-  </div></div>`;
-}
-function renderRecordModal(){
-  const catKey = state.modal.catKey;
-  const editRecord = state.modal.editRecord;
-  const cat = CAT_BY_KEY[catKey] || PREV_BY_KEY[catKey];
-  const sub = state.modalSub;
-  let fields = "";
-  if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
-  else if(catKey === "water"){ fields = chipField("量の目安", ["少なめ","ふつう","多め"], sub.amount, "amount"); }
-  else if(catKey === "pee" || catKey === "poop"){
-    fields = `<div class="field"><div class="field-label">様子</div><div class="chip-row">
-      <button class="chip ${sub.status===''?'active':''}" onclick="setModalSub('status','')">特になし</button>
-      <button class="chip ${sub.status==='good'?'active':''}" onclick="setModalSub('status','good')">順調</button>
-      <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">気になる</button>
-    </div></div>`;
-  } else if(catKey === "weight"){
-    fields = `<label class="field"><div class="field-label">体重（kg）</div><input id="rf-weight" type="number" step="0.01" placeholder="例：4.20" value="${editRecord?editRecord.value:''}"></label>`;
-  } else if(catKey === "health"){
-    fields = chipField("今日の様子", ["元気","普通","不調"], sub.condition, "condition");
-  } else if(catKey === "hospital"){
-    fields = `
-      <label class="field"><div class="field-label">内容・理由</div><input id="rf-reason" placeholder="例：定期健診" value="${esc(editRecord?editRecord.reason:'')}"></label>
-      <label class="field"><div class="field-label">費用（円・任意）</div><input id="rf-cost" type="number" value="${editRecord&&editRecord.cost?editRecord.cost:''}"></label>
-      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextvisit" type="date" value="${esc(editRecord?editRecord.nextVisit||'':'')}"></label>`;
-  } else if(catKey === "medication"){
-    fields = `<label class="field"><div class="field-label">薬の名前</div><input id="rf-medname" placeholder="例：フィラリア予防薬" value="${esc(editRecord?editRecord.name:'')}"></label>`;
-  } else if(catKey === "trimming"){
-    fields = `
-      <label class="field"><div class="field-label">お店（任意）</div><input id="rf-shop" value="${esc(editRecord?editRecord.shop||'':'')}"></label>
-      <label class="field"><div class="field-label">担当者（任意）</div><input id="rf-staff" value="${esc(editRecord?editRecord.staff||'':'')}"></label>
-      <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
-  }
-  const dtValue = editRecord ? toLocalInputValue(editRecord.datetime) : nowLocalInput();
-  const memoValue = editRecord ? esc(editRecord.memo||"") : "";
-  return `
-  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
-    <div class="modal-sheet" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を${editRecord?'編集':'記録'}</div>
-        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
-      </div>
-      <label class="field"><div class="field-label">日時</div><input id="rf-datetime" type="datetime-local" value="${dtValue}"></label>
-      ${fields}
-      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2">${memoValue}</textarea></label>
-      ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
-      <div id="rf-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <button id="rf-submit" class="btn-primary" style="flex:1;" onclick="saveRecordFromModal()">${editRecord?'保存する':'記録する'}</button>
-        ${editRecord ? `<button class="btn-danger" onclick="deleteRecordFromModal()">削除</button>` : ""}
-      </div>
-    </div>
-  </div>`;
-}
-function renderDiaryModal(){
-  const e = state.modal.editEntry;
-  const dateVal = e ? e.date.slice(0,10) : nowLocalInput().slice(0,10);
-  const captionVal = e ? esc(e.caption||"") : "";
-  return `
-  <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
-    <div class="modal-sheet" onclick="event.stopPropagation()">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">${e?'日記を編集':'今日の一枚'}</div>
-        <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
-      </div>
-      <label class="field"><div class="field-label">日付</div><input id="df-date" type="date" value="${dateVal}"></label>
-      <div class="field">
-        <div class="field-label">写真（任意）</div>
-        <input type="file" accept="image/*" id="df-file" style="display:none" onchange="handleDiaryPhoto(this)">
-        <div id="df-photobox" onclick="document.getElementById('df-file').click()" style="display:flex;align-items:center;justify-content:center;min-height:110px;border-radius:12px;border:1.5px dashed var(--line);background:var(--bg);cursor:pointer;overflow:hidden;">
-          ${state.modalPhoto ? `<img src="${state.modalPhoto}" style="width:100%;border-radius:10px;display:block;">` : `<span class="mono" style="font-size:13px;color:var(--inkSoft);">📷 写真を選ぶ</span>`}
-        </div>
-      </div>
-      ${chipField("今日の様子", ["元気","普通","不調"], state.modalSub.mood||"元気", "mood")}
-      <label class="field"><div class="field-label">一言（任意）</div><textarea id="df-caption" rows="2" placeholder="今日はお散歩でリスを追いかけました">${captionVal}</textarea></label>
-      <div id="df-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;">
-        <button id="df-submit" class="btn-primary" style="flex:1;" onclick="saveDiaryFromModal()">${e?'保存する':'残す'}</button>
-        ${e ? `<button class="btn-danger" onclick="deleteDiaryFromModal()">削除</button>` : ""}
-      </div>
-    </div>
-  </div>`;
-}
-
-/* ================= pet setup screen (first run only) ================= */
-function renderPetSetup(){
-  if(state.tmpSpecies === undefined) state.tmpSpecies = "dog";
-  if(state.tmpGender === undefined) state.tmpGender = "unknown";
-  if(state.tmpPetPhoto === undefined) state.tmpPetPhoto = null;
-  return `
-  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:48px 20px;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;">
-      <span style="font-size:24px;">🐾</span>
-    </div>
-    <div class="display" style="font-weight:700;font-size:20px;margin-bottom:4px;">この子のことを教えて</div>
-    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:22px;">あとから設定からいつでも変更できます</div>
-    <div class="card" style="width:100%;max-width:400px;padding:22px;">
-      <div style="margin-bottom:16px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
-      <label class="field"><div class="field-label">名前</div><input id="pet-name" placeholder="例：もふ"></label>
-      <div class="field">
-        <div class="field-label">種類</div>
-        <div class="chip-row">
-          <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
-          <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
-          <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
-        </div>
-      </div>
-      <div class="field">
-        <div class="field-label">性別</div>
-        <div class="chip-row">
-          <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
-          <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
-          <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
-        </div>
-      </div>
-      <label class="field"><div class="field-label">犬種・猫種（任意）</div><input id="pet-breed" placeholder="例：トイプードル"></label>
-      <label class="field"><div class="field-label">お誕生日（任意）</div><input id="pet-birthday" type="date"></label>
-      <div id="pet-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
-      <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="submitPetSetup()">はじめる</button>
-    </div>
-  </div>`;
-}
-
-/* ================= login screen ================= */
-function renderLogin(){
-  return `
-  <div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
-    <div style="font-size:40px;margin-bottom:10px;">🐾</div>
-    <div class="display" style="font-weight:700;font-size:22px;margin-bottom:24px;">おかえりなさい</div>
-    <div class="card" style="width:100%;max-width:360px;padding:22px;">
-      <label class="field">
-        <div class="field-label">パスワード</div>
-        <input id="login-pw" type="password" onkeydown="if(event.key==='Enter') loginSubmit()" placeholder="••••••••">
-      </label>
-      <div id="login-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
-      <button id="login-btn" class="btn-primary" style="width:100%;" onclick="loginSubmit()">ログイン</button>
-    </div>
-  </div>`;
-}
-
-/* ================= master render ================= */
-const TABS = [
-  {key:"home", label:"ホーム", emoji:"🏠"},
-  {key:"history", label:"きろく", emoji:"📖"},
-  {key:"weight", label:"体重", emoji:"⚖️"},
-  {key:"diary", label:"日記", emoji:"📷"},
-  {key:"settings", label:"設定", emoji:"⚙️"},
-];
-
-function render(){
-  const app = document.getElementById("app");
-  if(!authReady){
-    app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;"><span class="spin" style="font-size:24px;">⏳</span></div>`;
-    return;
-  }
-  if(!state.loggedIn){
-    app.innerHTML = renderLogin();
-    return;
-  }
-  if(!state.pet){
-    app.innerHTML = renderPetSetup();
-    return;
-  }
-
-  let body = "";
-  if(state.tab === "home") body = renderHome();
-  else if(state.tab === "history") body = renderHistory();
-  else if(state.tab === "weight") body = renderWeight();
-  else if(state.tab === "diary") body = renderDiary();
-  else if(state.tab === "settings") body = renderSettings();
-
-  app.innerHTML = `
-    ${renderTopBar()}
-    <div style="padding:6px 14px 90px;">${body}</div>
-    <div class="tabbar">
-      ${TABS.map(t=>`
-        <button class="tabbtn ${state.tab===t.key?'active':''}" onclick="switchTab('${t.key}')">
-          <span style="font-size:19px;">${t.emoji}</span>
-          <span style="font-size:10.5px;">${t.label}</span>
-        </button>`).join("")}
-    </div>
-    ${renderModal()}
-  `;
-  if(state.tab === "weight") setTimeout(drawWeightChart, 30);
 }
 
 render();
