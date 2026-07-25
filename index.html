@@ -494,12 +494,137 @@ async function handlePetPhoto(input){
   const box = document.getElementById("pet-photo-box");
   box.innerHTML = `<span class="mono spin" style="font-size:11px;">…</span>`;
   try{
-    const dataUrl = await resizeImageFile(file, 480, 0.62);
-    state.tmpPetPhoto = dataUrl;
-    box.innerHTML = `<img src="${dataUrl}">`;
+    const dataUrl = await resizeImageFile(file, 1400, 0.85);
+    input.value = "";
+    openCropModal(dataUrl);
   }catch(e){
     box.innerHTML = `<span style="font-size:10px;color:var(--inkSoft);">失敗</span>`;
   }
+}
+
+/* ================= circular photo cropper ================= */
+let cropState = null;
+function openCropModal(dataUrl){
+  cropState = null;
+  state.modal = { type: "cropPhoto", sourceImage: dataUrl };
+  render();
+  setTimeout(initCropStage, 30);
+}
+function cancelCropModal(){
+  cropState = null;
+  closeModal();
+}
+function initCropStage(){
+  const img = document.getElementById("crop-img");
+  const stage = document.getElementById("crop-stage");
+  if(!img || !stage) return;
+  const setup = () => {
+    const stageSize = stage.clientWidth;
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    if(!nw || !nh) return;
+    const baseScale = Math.max(stageSize/nw, stageSize/nh);
+    cropState = {
+      baseScale, scale: 1,
+      tx: (stageSize - nw*baseScale)/2,
+      ty: (stageSize - nh*baseScale)/2,
+      naturalW: nw, naturalH: nh, stageSize,
+    };
+    applyCropTransform();
+    attachCropDragHandlers(stage);
+  };
+  if(img.complete && img.naturalWidth){ setup(); } else { img.onload = setup; }
+}
+function applyCropTransform(){
+  const img = document.getElementById("crop-img");
+  if(!img || !cropState) return;
+  const totalScale = cropState.baseScale * cropState.scale;
+  img.style.width = cropState.naturalW + "px";
+  img.style.height = cropState.naturalH + "px";
+  img.style.transform = `translate(${cropState.tx}px, ${cropState.ty}px) scale(${totalScale})`;
+}
+function clampCropTranslate(){
+  const totalScale = cropState.baseScale * cropState.scale;
+  const w = cropState.naturalW*totalScale, h = cropState.naturalH*totalScale;
+  const s = cropState.stageSize;
+  cropState.tx = Math.min(0, Math.max(s - w, cropState.tx));
+  cropState.ty = Math.min(0, Math.max(s - h, cropState.ty));
+}
+function onCropZoomChange(val){
+  if(!cropState) return;
+  const newScale = Number(val) / 100;
+  const s = cropState.stageSize;
+  const oldTotal = cropState.baseScale * cropState.scale;
+  const newTotal = cropState.baseScale * newScale;
+  const cx = (s/2 - cropState.tx) / oldTotal;
+  const cy = (s/2 - cropState.ty) / oldTotal;
+  cropState.scale = newScale;
+  cropState.tx = s/2 - cx*newTotal;
+  cropState.ty = s/2 - cy*newTotal;
+  clampCropTranslate();
+  applyCropTransform();
+}
+function attachCropDragHandlers(stage){
+  if(stage._cropHandlersAttached) return;
+  stage._cropHandlersAttached = true;
+  let dragging = false, startX = 0, startY = 0, startTx = 0, startTy = 0;
+  stage.addEventListener("pointerdown", (e) => {
+    if(!cropState) return;
+    dragging = true;
+    stage.setPointerCapture(e.pointerId);
+    startX = e.clientX; startY = e.clientY;
+    startTx = cropState.tx; startTy = cropState.ty;
+    stage.style.cursor = "grabbing";
+  });
+  stage.addEventListener("pointermove", (e) => {
+    if(!dragging || !cropState) return;
+    cropState.tx = startTx + (e.clientX - startX);
+    cropState.ty = startTy + (e.clientY - startY);
+    clampCropTranslate();
+    applyCropTransform();
+  });
+  const endDrag = () => { dragging = false; stage.style.cursor = "grab"; };
+  stage.addEventListener("pointerup", endDrag);
+  stage.addEventListener("pointerleave", endDrag);
+  stage.addEventListener("pointercancel", endDrag);
+}
+function confirmCropModal(){
+  const img = document.getElementById("crop-img");
+  if(!img || !cropState){ closeModal(); return; }
+  const outSize = 480;
+  const canvas = document.createElement("canvas");
+  canvas.width = outSize; canvas.height = outSize;
+  const ctx = canvas.getContext("2d");
+  const totalScale = cropState.baseScale * cropState.scale;
+  const sx = (0 - cropState.tx) / totalScale;
+  const sy = (0 - cropState.ty) / totalScale;
+  const sSize = cropState.stageSize / totalScale;
+  ctx.drawImage(img, sx, sy, sSize, sSize, 0, 0, outSize, outSize);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+  state.tmpPetPhoto = dataUrl;
+  cropState = null;
+  closeModal();
+}
+function renderCropModal(){
+  return `
+  <div class="modal-backdrop" onclick="if(event.target===this) cancelCropModal()">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-weight:700;font-size:19px;">顔写真を調整</div>
+        <button onclick="cancelCropModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
+      </div>
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:14px;">ドラッグして位置を調整し、スライダーで拡大できます</div>
+      <div id="crop-stage" style="position:relative;width:240px;height:240px;margin:0 auto 18px;border-radius:50%;overflow:hidden;background:var(--cardSoft);touch-action:none;cursor:grab;box-shadow:0 0 0 4px var(--cardSoft), 0 0 0 5px var(--line);">
+        <img id="crop-img" src="${state.modal.sourceImage}" draggable="false" style="position:absolute;top:0;left:0;transform-origin:0 0;user-select:none;">
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+        <span style="font-size:13px;color:var(--inkSoft);">🔍</span>
+        <input id="crop-zoom" type="range" min="100" max="300" value="100" oninput="onCropZoomChange(this.value)" style="flex:1;">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary" style="flex:1;" onclick="confirmCropModal()">この写真にする</button>
+      </div>
+    </div>
+  </div>`;
 }
 
 /* ================= pet setup (first run only) ================= */
@@ -576,12 +701,14 @@ function openEditRecordById(id){
 async function saveRecordFromModal(){
   const catKey = state.modal.catKey;
   const editRecord = state.modal.editRecord;
-  const dtVal = document.getElementById("rf-datetime").value;
+  const dateVal = document.getElementById("rf-date").value;
+  const timeVal = document.getElementById("rf-time").value || "00:00";
   const memo = document.getElementById("rf-memo") ? document.getElementById("rf-memo").value.trim() : "";
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+  if(!dateVal){ document.getElementById("rf-err").textContent = "日付を入力してください"; return; }
   let rec = {
     type: catKey,
-    datetime: new Date(dtVal).toISOString(),
+    datetime: new Date(`${dateVal}T${timeVal}`).toISOString(),
     memo,
     author: editRecord ? (editRecord.author || getMyName()) : getMyName(),
     createdAt: editRecord ? editRecord.createdAt : new Date().toISOString(),
@@ -941,10 +1068,11 @@ function renderHome(){
         <button onclick="openPetEdit()" style="position:absolute;bottom:-2px;right:-2px;width:23px;height:23px;border-radius:50%;background:var(--coral);border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;padding:0;color:#fff;">📷</button>
       </div>
       <div style="flex:1;min-width:0;">
-        <div class="display" style="font-weight:700;font-size:22px;">${esc(pet.name)}</div>
-        <div class="chip-row" style="margin-top:6px;">
+        <div style="font-weight:700;font-size:22px;">${esc(pet.name)}</div>
+        <div class="chip-row" style="margin-top:6px;align-items:center;">
           <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:4px 11px;font-size:12px;">${pet.species==="dog"?"🐶 犬":pet.species==="cat"?"🐱 猫":"🐾"}</span>
           ${genderLabel ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:4px 11px;font-size:12px;">${genderLabel}</span>` : ""}
+          ${age ? `<span style="font-size:12.5px;color:var(--inkSoft);">${age.years>0?`${age.years}歳${age.months}ヶ月`:`${age.months}ヶ月`}</span>` : ""}
         </div>
       </div>
     </div>
@@ -955,15 +1083,14 @@ function renderHome(){
     ${state.petDetailOpen ? `
     <div class="chip-row" style="margin-top:10px;">
       ${pet.breed ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">🐾 ${esc(pet.breed)}</span>` : ""}
-      ${pet.color ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">毛色 ${esc(pet.color)}</span>` : ""}
-      <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">避妊・去勢 ${pet.neuter==='done'?'済':pet.neuter==='not'?'未':'不明'}</span>
+      ${pet.color ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#D8CBB0;margin-right:5px;vertical-align:middle;"></span>毛色 ${esc(pet.color)}</span>` : ""}
+      <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px dashed var(--mintText);margin-right:5px;vertical-align:middle;"></span>避妊・去勢 ${pet.neuter==='done'?'済':pet.neuter==='not'?'未':'不明'}</span>
     </div>` : ""}
 
     ${age ? `
     <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line);">
       <div><span class="mono" style="font-size:26px;font-weight:600;">${age.days}</span><span style="font-size:12px;color:var(--inkSoft);"> 日 生後</span></div>
       <div style="font-size:12.5px;color:var(--inkSoft);margin-top:4px;">${age.years>0?`${age.years}歳${age.months}ヶ月`:`生後${age.months}ヶ月`}${human?` ・ 人間${human}歳`:""} ・ <span style="background:var(--chip);color:var(--chipText);padding:2px 9px;border-radius:999px;">${age.stage}</span></div>
-      ${human ? `<div style="font-size:10.5px;color:var(--inkSoft);margin-top:4px;">※人間換算年齢は簡易的な目安です</div>` : ""}
     </div>` : ""}
   </div>
 
@@ -1275,6 +1402,7 @@ function renderModal(){
   if(state.modal.type === "diary") return renderDiaryModal();
   if(state.modal.type === "event") return renderEventModal();
   if(state.modal.type === "pickCategory") return renderPickCategoryModal();
+  if(state.modal.type === "cropPhoto") return renderCropModal();
   return "";
 }
 function chipField(label, options, current, subKey){
@@ -1316,7 +1444,8 @@ function renderRecordModal(){
       </div>
       <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
   }
-  const dtValue = editRecord ? toLocalInputValue(editRecord.datetime) : (state.modal.presetDay ? state.modal.presetDay+"T12:00" : nowLocalInput());
+  const dtDate = editRecord ? toLocalInputValue(editRecord.datetime).slice(0,10) : (state.modal.presetDay || new Date().toISOString().slice(0,10));
+  const dtTime = editRecord ? toLocalInputValue(editRecord.datetime).slice(11,16) : (state.modal.presetDay ? "12:00" : nowLocalInput().slice(11,16));
   const memoValue = editRecord ? esc(editRecord.memo||"") : "";
   return `
   <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
@@ -1325,7 +1454,10 @@ function renderRecordModal(){
         <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を${editRecord?'編集':'記録'}</div>
         <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <label class="field"><div class="field-label">日時</div><input id="rf-datetime" type="datetime-local" value="${dtValue}"></label>
+      <div class="field-row">
+        <label class="field"><div class="field-label">日付</div><input id="rf-date" type="date" value="${dtDate}"></label>
+        <label class="field"><div class="field-label">時刻</div><input id="rf-time" type="time" value="${dtTime}"></label>
+      </div>
       ${fields}
       <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2">${memoValue}</textarea></label>
       ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
