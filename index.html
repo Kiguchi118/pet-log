@@ -225,6 +225,10 @@ function humanAgeApprox(years, months){
   else h = 24 + (t-2)*4;
   return Math.max(1, Math.round(h));
 }
+function localDayStr(input){
+  const d = (input instanceof Date) ? input : new Date(input);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function esc(s){
   return (s==null?"":String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -397,7 +401,7 @@ const state = {
   statsPeriod: 7, stats: null,
 
   calendarMonth: (()=>{ const n=new Date(); return {y:n.getFullYear(), m:n.getMonth()+1}; })(),
-  calendarSelectedDay: new Date().toISOString().slice(0,10),
+  calendarSelectedDay: localDayStr(new Date()),
   calendarRecords: [], calendarEvents: [], calendarLoading: false,
 
   diary: [], diaryLastDoc: null, diaryHasMore: true, diaryLoading: false,
@@ -765,15 +769,14 @@ async function saveRecordFromModal(){
       rec.urineColor = state.modalSub.urineColor || "";
       rec.urineAmount = state.modalSub.urineAmount || "";
       rec.photo = state.modalPhoto || null;
-      rec.status = rec.urineAmount === "出ない" ? "bad" : "good";
+      rec.status = state.modalSub.status === "bad" ? "bad" : "good";
     }
     if(catKey === "poop"){
       rec.stoolScore = state.modalSub.stoolScore || "";
       rec.stoolColor = state.modalSub.stoolColor || "";
       rec.concerns = state.modalSub.concerns || [];
       rec.photo = state.modalPhoto || null;
-      const score = rec.stoolScore;
-      rec.status = (score===1 || score===6 || score===7 || rec.concerns.length>0) ? "bad" : "good";
+      rec.status = state.modalSub.status === "bad" ? "bad" : "good";
     }
     if(catKey === "vomit"){
       rec.vomitContent = state.modalSub.vomitContent || "";
@@ -811,7 +814,7 @@ async function saveRecordFromModal(){
       next.setDate(next.getDate() + item.intervalDays);
       await upcomingRef().doc(catKey).set({
         label: `${item.label}${item.group==='vaccine'?'接種':'投与'}`,
-        date: next.toISOString().slice(0,10),
+        date: localDayStr(next),
         memo: rec.memo,
       });
     }
@@ -1227,7 +1230,7 @@ function renderCategoryRows(list, lastByType){
 
 function renderPreventiveRow(item, lastByType){
   const last = lastByType[item.key];
-  const subtitle = last ? `前回 ${last.datetime.slice(0,10)}${last.memo?(' ・ '+esc(last.memo)):''}` : "まだ記録がありません";
+  const subtitle = last ? `前回 ${localDayStr(last.datetime)}${last.memo?(' ・ '+esc(last.memo)):''}` : "まだ記録がありません";
   const btnLabel = item.group==="vaccine" ? "接種" : "投与";
   return `
   <div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;">
@@ -1314,7 +1317,7 @@ function renderHistoryList(){
 
   const grouped = {};
   state.historyRecords.forEach(r => {
-    const day = (r.datetime||"").slice(0,10);
+    const day = r.datetime ? localDayStr(r.datetime) : "";
     if(!grouped[day]) grouped[day] = [];
     grouped[day].push(r);
   });
@@ -1339,11 +1342,11 @@ function renderHistoryCalendar(){
   const firstDay = new Date(y, m-1, 1);
   const startWeekday = firstDay.getDay();
   const daysInMonth = new Date(y, m, 0).getDate();
-  const todayStr = new Date().toISOString().slice(0,10);
+  const todayStr = localDayStr(new Date());
 
   const dayHasRecord = {};
   const dayHasEvent = {};
-  state.calendarRecords.forEach(r => { dayHasRecord[r.datetime.slice(0,10)] = true; });
+  state.calendarRecords.forEach(r => { dayHasRecord[localDayStr(r.datetime)] = true; });
   state.calendarEvents.forEach(e => { dayHasEvent[e.date] = true; });
 
   const weekLabels = ["日","月","火","水","木","金","土"];
@@ -1386,8 +1389,8 @@ function renderHistoryCalendar(){
 
 function renderCalendarDayPanel(){
   const day = state.calendarSelectedDay;
-  const dayRecords = state.calendarRecords.filter(r=>r.datetime.slice(0,10)===day).sort((a,b)=> a.datetime.localeCompare(b.datetime));
-  const dayEvents = state.calendarEvents.filter(e=>e.date===day);
+  const dayRecords = state.calendarRecords.filter(r=>localDayStr(r.datetime)===day).sort((a,b)=> b.datetime.localeCompare(a.datetime));
+  const dayEvents = state.calendarEvents.filter(e=>e.date===day).sort((a,b)=> (b.time||"").localeCompare(a.time||""));
   return `
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;">
     <div style="font-weight:700;font-size:15px;">${fmtDateHeading(day+"T00:00:00")}</div>
@@ -1545,12 +1548,20 @@ function renderRecordModal(){
   else if(catKey === "water"){ fields = chipField("量の目安", ["少なめ","ふつう","多め"], sub.amount, "amount"); }
   else if(catKey === "pee"){
     fields = `
+      <div class="field"><div class="field-label">様子</div><div class="chip-row">
+        <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
+      </div></div>
       ${chipField("尿の色（あれば選択）", URINE_COLORS, sub.urineColor, "urineColor")}
       ${chipField("量（あれば選択）", URINE_AMOUNTS, sub.urineAmount, "urineAmount")}
       ${renderRecordPhotoField()}
     `;
   } else if(catKey === "poop"){
     fields = `
+      <div class="field"><div class="field-label">様子</div><div class="chip-row">
+        <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
+      </div></div>
       <div style="font-size:11.5px;color:var(--inkSoft);margin:-6px 0 12px;line-height:1.6;">下痢や便に異物が混ざる状態が続く場合は、誤食や消化器の不調の可能性もあります。心配なときは動物病院にご相談ください。</div>
       <div class="field">
         <div class="field-label">便の状態（あれば選択）</div>
@@ -1597,7 +1608,7 @@ function renderRecordModal(){
       </div>
       <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
   }
-  const dtDate = editRecord ? toLocalInputValue(editRecord.datetime).slice(0,10) : (state.modal.presetDay || new Date().toISOString().slice(0,10));
+  const dtDate = editRecord ? toLocalInputValue(editRecord.datetime).slice(0,10) : (state.modal.presetDay || localDayStr(new Date()));
   const dtTime = editRecord ? toLocalInputValue(editRecord.datetime).slice(11,16) : (state.modal.presetDay ? "12:00" : nowLocalInput().slice(11,16));
   const memoValue = editRecord ? esc(editRecord.memo||"") : "";
   return `
