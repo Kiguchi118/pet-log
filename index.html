@@ -71,7 +71,10 @@
   input[type="date"],input[type="time"],input[type="datetime-local"]{
     width:100%;max-width:100%;min-width:0;box-sizing:border-box;
   }
-  .field-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;min-width:0;}
+  .field-row{display:grid;grid-template-columns:1fr;gap:10px;min-width:0;}
+  @media (min-width:480px){
+    .field-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr);}
+  }
   .field-row .field{min-width:0;}
   .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
   .chip{font-size:13.5px;padding:7px 13px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;}
