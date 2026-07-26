@@ -1089,6 +1089,18 @@ function renderTopBar(){
 }
 
 /* ================= HOME ================= */
+function relativeDayLabel(dateStr){
+  const target = new Date(dateStr+"T00:00:00");
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diffDays = Math.round((target-today)/86400000);
+  const days = ["日","月","火","水","木","金","土"];
+  const md = `${target.getMonth()+1}/${target.getDate()}(${days[target.getDay()]})`;
+  if(diffDays === 0) return { text:`今日・${md}`, tone:"soon" };
+  if(diffDays === 1) return { text:`明日・${md}`, tone:"soon" };
+  if(diffDays < 0) return { text:`${md}（${Math.abs(diffDays)}日前）`, tone:"overdue" };
+  if(diffDays <= 7) return { text:`${md}（${diffDays}日後）`, tone:"soon" };
+  return { text: md, tone:"later" };
+}
 function renderHome(){
   if(!state.pet) return "";
   const pet = state.pet;
@@ -1100,10 +1112,10 @@ function renderHome(){
   const lastByType = {};
   state.homeRecords.forEach(r => { if(!lastByType[r.type]) lastByType[r.type] = r; });
 
-  const autoUpcoming = (state.homeUpcoming||[]).map(u => ({ label:u.label, date:u.date, memo:u.memo, source:"auto" }));
+  const autoUpcoming = (state.homeUpcoming||[]).map(u => ({ type:u.type, label:u.label, date:u.date, memo:u.memo, source:"auto" }));
   const manualUpcoming = (state.homeEvents||[]).map(e => {
     const meta = EVENT_TYPE_BY_KEY[e.type] || { label:e.type };
-    return { label: meta.label, date: e.date, memo: e.memo, source:"event", id:e.id };
+    return { type:e.type, label: meta.label, date: e.date, memo: e.memo, source:"event", id:e.id };
   });
   const upcomingSoon = [...autoUpcoming, ...manualUpcoming].filter(u=>{
     const diff = (new Date(u.date) - new Date())/86400000;
@@ -1112,13 +1124,22 @@ function renderHome(){
 
   return `
   ${upcomingSoon.length ? `
-  <div class="card" style="padding:14px 16px;margin-bottom:14px;background:var(--amber);">
-    <div style="font-weight:700;font-size:13px;margin-bottom:6px;color:var(--amberText);">次回の予定</div>
-    ${upcomingSoon.map(u=>`
-      <div onclick="${u.source==='event'?`openEventModal(${JSON.stringify(u.date)},${JSON.stringify(u.id)})`:''}" style="font-size:13px;color:var(--amberText);display:flex;justify-content:space-between;${u.source==='event'?'cursor:pointer;':''}">
-        <span>${esc(u.label)}${u.memo?`・${esc(u.memo)}`:""}</span>
-        <span class="mono">${esc(u.date)}</span>
-      </div>`).join("")}
+  <div class="card" style="padding:14px 16px;margin-bottom:14px;">
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">🔔 次回の予定</div>
+    ${upcomingSoon.map((u,i)=>{
+      const rd = relativeDayLabel(u.date);
+      const emoji = (ALL_TYPE_META[u.type]||{}).emoji || (EVENT_TYPE_BY_KEY[u.type]||{}).emoji || "📌";
+      const badgeBg = rd.tone==="overdue" ? "var(--coralSoft)" : rd.tone==="soon" ? "var(--mint)" : "var(--chip)";
+      const badgeText = rd.tone==="overdue" ? "var(--coralSoftText)" : rd.tone==="soon" ? "var(--mintText)" : "var(--chipText)";
+      return `
+      <div onclick="${u.source==='event'?`openEventModal(${JSON.stringify(u.date)},${JSON.stringify(u.id)})`:''}" style="display:flex;align-items:center;gap:10px;padding:9px 0;${i>0?'border-top:1px solid var(--line);':''}${u.source==='event'?'cursor:pointer;':''}">
+        <span style="font-size:17px;flex-shrink:0;">${emoji}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.label)}${u.memo?` ・ ${esc(u.memo)}`:""}</div>
+        </div>
+        <span class="mono" style="font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeText};white-space:nowrap;flex-shrink:0;">${rd.text}</span>
+      </div>`;
+    }).join("")}
   </div>` : ""}
 
   <div class="card" style="padding:18px;margin-bottom:14px;">
@@ -1307,9 +1328,10 @@ function renderHistoryCalendar(){
   const daysInMonth = new Date(y, m, 0).getDate();
   const todayStr = new Date().toISOString().slice(0,10);
 
-  const dayHasData = {};
-  state.calendarRecords.forEach(r => { dayHasData[r.datetime.slice(0,10)] = true; });
-  state.calendarEvents.forEach(e => { dayHasData[e.date] = true; });
+  const dayHasRecord = {};
+  const dayHasEvent = {};
+  state.calendarRecords.forEach(r => { dayHasRecord[r.datetime.slice(0,10)] = true; });
+  state.calendarEvents.forEach(e => { dayHasEvent[e.date] = true; });
 
   const weekLabels = ["日","月","火","水","木","金","土"];
   let cells = [];
@@ -1322,6 +1344,10 @@ function renderHistoryCalendar(){
     <div class="display" style="font-weight:700;font-size:17px;">${y}年${m}月</div>
     <button onclick="changeCalendarMonth(1)" class="toppill">›</button>
   </div>
+  <div style="display:flex;gap:14px;margin-bottom:10px;font-size:11px;color:var(--inkSoft);">
+    <span style="display:flex;align-items:center;gap:4px;"><span style="font-size:11px;">📅</span>予定がある日</span>
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--coral);display:inline-block;"></span>記録がある日</span>
+  </div>
   <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
     ${weekLabels.map((w,i)=>`<div style="text-align:center;font-size:11px;color:${i===0?'var(--coral)':i===6?'var(--chipText)':'var(--inkSoft)'};font-weight:600;">${w}</div>`).join("")}
   </div>
@@ -1331,11 +1357,13 @@ function renderHistoryCalendar(){
       const dateStr = `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
       const isToday = dateStr===todayStr;
       const isSelected = dateStr===state.calendarSelectedDay;
-      const hasData = !!dayHasData[dateStr];
+      const hasRecord = !!dayHasRecord[dateStr];
+      const hasEvent = !!dayHasEvent[dateStr];
       return `
-      <button onclick="selectCalendarDay('${dateStr}')" style="aspect-ratio:1/1;border-radius:10px;border:${isSelected?'2px solid var(--coral)':'1px solid transparent'};background:${isSelected?'var(--coralSoft)':'var(--card)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+      <button onclick="selectCalendarDay('${dateStr}')" style="position:relative;aspect-ratio:1/1;border-radius:10px;border:${isSelected?'2px solid var(--coral)':'1px solid transparent'};background:${isSelected?'var(--coralSoft)':'var(--card)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+        ${hasEvent?`<span style="position:absolute;top:3px;right:4px;font-size:9px;line-height:1;">📅</span>`:""}
         <span style="font-size:13px;color:${isToday?'var(--coral)':'var(--ink)'};font-weight:${isToday?'700':'400'};">${d}</span>
-        ${hasData?`<span style="width:5px;height:5px;border-radius:50%;background:var(--coral);margin-top:2px;"></span>`:""}
+        ${hasRecord?`<span style="width:5px;height:5px;border-radius:50%;background:var(--coral);margin-top:2px;"></span>`:""}
       </button>`;
     }).join("")}
   </div>`;
@@ -1352,6 +1380,8 @@ function renderCalendarDayPanel(){
     <div style="font-weight:700;font-size:15px;">${fmtDateHeading(day+"T00:00:00")}</div>
     <button class="row-btn" onclick="openEventModal('${day}')">📅 予定を追加</button>
   </div>
+  ${dayEvents.length ? `
+  <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:2px 2px 8px;">📅 予定（${dayEvents.length}件）</div>
   ${dayEvents.map(ev=>{
     const meta = EVENT_TYPE_BY_KEY[ev.type] || { emoji:"🗓️", label: ev.type };
     return `
@@ -1363,10 +1393,13 @@ function renderCalendarDayPanel(){
       </div>
     </div>`;
   }).join("")}
+  <div style="height:6px;"></div>` : ""}
   ${dayRecords.length===0 && dayEvents.length===0 ? `<div style="text-align:center;padding:16px;color:var(--inkSoft);font-size:13px;">この日の記録はありません</div>` : ""}
-  <div class="card" style="overflow:hidden;${dayRecords.length? 'margin-bottom:8px;':''}">
+  ${dayRecords.length ? `
+  <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:2px 2px 8px;">📋 記録（${dayRecords.length}件）</div>
+  <div class="card" style="overflow:hidden;margin-bottom:8px;">
     ${dayRecords.map((r,i)=> renderRecordRow(r, {divider: i>0})).join("")}
-  </div>
+  </div>` : ""}
   <button onclick="openPastRecordPicker('${day}')" style="width:100%;padding:11px;margin-top:6px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">＋ 過去の記録を追加</button>
   `;
 }
