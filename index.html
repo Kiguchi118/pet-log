@@ -60,6 +60,7 @@
   .btn-primary{background:var(--coral);color:#fff;font-weight:700;border:none;border-radius:12px;padding:11px 18px;cursor:pointer;}
   .btn-primary:disabled{opacity:.55;cursor:default;}
   .btn-danger{background:none;border:1px solid var(--coralSoft);color:var(--coral);font-weight:600;border-radius:10px;padding:9px 14px;cursor:pointer;}
+  .btn-secondary{background:#fff;border:1px solid var(--line);color:var(--ink);font-weight:600;border-radius:999px;padding:11px 18px;cursor:pointer;}
   .field{margin-bottom:12px;display:block;min-width:0;}
   .field-label{font-size:12.5px;color:var(--inkSoft);margin-bottom:4px;}
   .field input, .field textarea{
@@ -70,13 +71,13 @@
   input[type="date"],input[type="time"],input[type="datetime-local"]{
     width:100%;max-width:100%;min-width:0;box-sizing:border-box;
   }
-  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;min-width:0;}
+  .field-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;min-width:0;}
   .field-row .field{min-width:0;}
   .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
   .chip{font-size:13.5px;padding:7px 13px;border-radius:999px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer;}
   .chip.active{border-color:var(--coral);background:var(--coral);color:#fff;}
-  .modal-backdrop{position:fixed;inset:0;background:rgba(59,46,39,.45);display:flex;align-items:flex-end;justify-content:center;z-index:50;}
-  .modal-sheet{background:#fff;width:100%;max-width:480px;border-radius:22px 22px 0 0;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;}
+  .modal-backdrop{position:fixed;inset:0;background:rgba(59,46,39,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;box-sizing:border-box;}
+  .modal-sheet{background:#fff;width:100%;max-width:480px;min-width:0;border-radius:22px;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;}
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom);}
   .tabbtn{flex:1;background:none;border:none;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--inkSoft);}
   .tabbtn.active{color:var(--coral);font-weight:700;}
@@ -277,6 +278,33 @@ const PREVENTIVE_ITEMS = [
 ];
 const PREV_BY_KEY = Object.fromEntries(PREVENTIVE_ITEMS.map(p=>[p.key,p]));
 const ALL_TYPE_META = { ...CAT_BY_KEY, ...PREV_BY_KEY };
+
+/* おしっこ・うんちの詳細記録用の選択肢 */
+const URINE_COLORS = ["通常","濃い","ピンク・赤"];
+const URINE_AMOUNTS = ["多い","普通","少ない","出ない"];
+const STOOL_SCALE = [
+  { score:1, label:"非常に硬い", desc:"コロコロとして乾燥し、崩れやすい状態です。" },
+  { score:2, label:"理想的", desc:"硬すぎず形があり、しなやかで扱いやすい状態です。" },
+  { score:3, label:"やや柔らかい", desc:"形は保っていますが、地面にわずかに跡が残ります。" },
+  { score:4, label:"柔らかい", desc:"形はありますが崩れやすく、拾うと跡が残ります。" },
+  { score:5, label:"とても柔らかい", desc:"形をほとんど保てず、山状に広がります。" },
+  { score:6, label:"泥状", desc:"形がなく、水分が多い状態です。" },
+  { score:7, label:"水様", desc:"完全に液状で、水たまりのような下痢です。" },
+];
+const STOOL_COLORS = ["茶","黒","黄","緑","白","赤"];
+const STOOL_CONCERNS = ["血便（鮮血）","タール状・黒色便","粘液便","嘔吐","食欲不振","元気消失・ぐったり","排便時のいきみ・痛がる様子","便に異物が混入","通常と違う強い臭い"];
+
+function multiChipField(label, options, currentArr, subKey){
+  const arr = currentArr || [];
+  return `<div class="field"><div class="field-label">${label}</div><div class="chip-row">
+    ${options.map(o=>`<button class="chip ${arr.includes(o)?'active':''}" onclick="toggleModalSubArray('${subKey}','${o}')">${o}</button>`).join("")}
+  </div></div>`;
+}
+function toggleModalSubArray(field, value){
+  const arr = state.modalSub[field] || [];
+  state.modalSub[field] = arr.includes(value) ? arr.filter(v=>v!==value) : [...arr, value];
+  render();
+}
 const ALL_LOGGABLE = [...CATEGORIES, ...PREVENTIVE_ITEMS];
 
 /* 「予定」= 未来の予定。記録(records)とは別に管理します。 */
@@ -293,8 +321,8 @@ function summarizeRecord(r){
   switch(r.type){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "お水を記録";
-    case "pee": return [(r.status==="bad"?"失敗":"成功"), r.memo].filter(Boolean).join(" ・ ");
-    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.memo].filter(Boolean).join(" ・ ");
+    case "pee": return [(r.status==="bad"?"失敗":"成功"), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
@@ -311,7 +339,8 @@ function recordDetailText(r){
   switch(r.type){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
-    case "pee": case "poop": return r.memo || "";
+    case "pee": return [r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [r.stoolScore?`便スコア${r.stoolScore}（${(STOOL_SCALE.find(s=>s.score===r.stoolScore)||{}).label||""}）`:"", r.stoolColor, (r.concerns&&r.concerns.length?r.concerns.join("・"):""), r.memo].filter(Boolean).join(" ・ ");
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
@@ -338,6 +367,7 @@ function renderRecordRow(r, opts){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <span style="font-weight:700;font-size:14px;">${esc(meta.label)}</span>
         ${recordBadge(r)}
+        ${r.photo ? `<span style="font-size:12px;">📷</span>` : ""}
       </div>
       ${detail ? `<div style="font-size:12.5px;color:var(--ink);margin-top:2px;">${esc(detail)}</div>` : ""}
       ${r.author ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-top:3px;">記録: 🧑 ${esc(r.author)}</div>` : ""}
@@ -668,7 +698,13 @@ function openRecordModal(catKey, editRecord, presetDay){
     amount: (editRecord && editRecord.amount) || "ふつう",
     status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "good",
     condition: (editRecord && editRecord.condition) || "元気",
+    urineColor: (editRecord && editRecord.urineColor) || "",
+    urineAmount: (editRecord && editRecord.urineAmount) || "",
+    stoolScore: (editRecord && editRecord.stoolScore) || "",
+    stoolColor: (editRecord && editRecord.stoolColor) || "",
+    concerns: (editRecord && editRecord.concerns) || [],
   };
+  state.modalPhoto = (editRecord && editRecord.photo) || null;
   render();
 }
 function openDiaryModal(editEntry){
@@ -717,7 +753,20 @@ async function saveRecordFromModal(){
 
   if(CAT_BY_KEY[catKey]){
     if(catKey === "food" || catKey === "water"){ rec.amount = state.modalSub.amount; }
-    if(catKey === "pee" || catKey === "poop"){ rec.status = state.modalSub.status; }
+    if(catKey === "pee"){
+      rec.urineColor = state.modalSub.urineColor || "";
+      rec.urineAmount = state.modalSub.urineAmount || "";
+      rec.photo = state.modalPhoto || null;
+      rec.status = rec.urineAmount === "出ない" ? "bad" : "good";
+    }
+    if(catKey === "poop"){
+      rec.stoolScore = state.modalSub.stoolScore || "";
+      rec.stoolColor = state.modalSub.stoolColor || "";
+      rec.concerns = state.modalSub.concerns || [];
+      rec.photo = state.modalPhoto || null;
+      const score = rec.stoolScore;
+      rec.status = (score===1 || score===6 || score===7 || rec.concerns.length>0) ? "bad" : "good";
+    }
     if(catKey === "weight"){
       const v = parseFloat(val("rf-weight"));
       if(isNaN(v)){ document.getElementById("rf-err").textContent = "体重を入力してください"; return; }
@@ -802,6 +851,19 @@ async function handleDiaryPhoto(input){
   const file = input.files && input.files[0];
   if(!file) return;
   const box = document.getElementById("df-photobox");
+  box.innerHTML = `<span class="mono spin">読み込み中</span>`;
+  try{
+    const dataUrl = await resizeImageFile(file);
+    state.modalPhoto = dataUrl;
+    box.innerHTML = `<img src="${dataUrl}" style="width:100%;border-radius:10px;display:block;">`;
+  }catch(e){
+    box.innerHTML = `<span class="mono" style="font-size:13px;color:var(--inkSoft);">写真の読み込みに失敗しました</span>`;
+  }
+}
+async function handleRecordPhoto(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  const box = document.getElementById("rf-photobox");
   box.innerHTML = `<span class="mono spin">読み込み中</span>`;
   try{
     const dataUrl = await resizeImageFile(file);
@@ -1410,6 +1472,16 @@ function chipField(label, options, current, subKey){
     ${options.map(o=>`<button class="chip ${current===o?'active':''}" onclick="setModalSub('${subKey}','${o}')">${o}</button>`).join("")}
   </div></div>`;
 }
+function renderRecordPhotoField(){
+  return `
+  <div class="field">
+    <div class="field-label">写真（任意）</div>
+    <input type="file" accept="image/*" id="rf-photo-file" style="display:none" onchange="handleRecordPhoto(this)">
+    <div id="rf-photobox" onclick="document.getElementById('rf-photo-file').click()" style="display:flex;align-items:center;justify-content:center;min-height:90px;border-radius:12px;border:1.5px dashed var(--line);background:var(--bg);cursor:pointer;overflow:hidden;">
+      ${state.modalPhoto ? `<img src="${state.modalPhoto}" style="width:100%;border-radius:10px;display:block;">` : `<span class="mono" style="font-size:13px;color:var(--inkSoft);">📷 写真を追加</span>`}
+    </div>
+  </div>`;
+}
 function renderRecordModal(){
   const catKey = state.modal.catKey;
   const editRecord = state.modal.editRecord;
@@ -1418,11 +1490,32 @@ function renderRecordModal(){
   let fields = "";
   if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
   else if(catKey === "water"){ fields = chipField("量の目安", ["少なめ","ふつう","多め"], sub.amount, "amount"); }
-  else if(catKey === "pee" || catKey === "poop"){
-    fields = `<div class="field"><div class="field-label">様子</div><div class="chip-row">
-      <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
-      <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
-    </div></div>`;
+  else if(catKey === "pee"){
+    fields = `
+      ${chipField("尿の色（あれば選択）", URINE_COLORS, sub.urineColor, "urineColor")}
+      ${chipField("量（あれば選択）", URINE_AMOUNTS, sub.urineAmount, "urineAmount")}
+      ${renderRecordPhotoField()}
+    `;
+  } else if(catKey === "poop"){
+    fields = `
+      <div style="font-size:11.5px;color:var(--inkSoft);margin:-6px 0 12px;line-height:1.6;">下痢や便に異物が混ざる状態が続く場合は、誤食や消化器の不調の可能性もあります。心配なときは動物病院にご相談ください。</div>
+      <div class="field">
+        <div class="field-label">便の状態（あれば選択）</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${STOOL_SCALE.map(s=>`
+          <button onclick="setModalSub('stoolScore',${s.score})" style="display:flex;align-items:center;gap:12px;text-align:left;padding:10px 12px;border-radius:12px;border:${sub.stoolScore===s.score?'2px solid var(--coral)':'1px solid var(--line)'};background:${sub.stoolScore===s.score?'var(--coralSoft)':'#fff'};cursor:pointer;">
+            <span class="mono" style="width:22px;height:22px;border-radius:50%;background:var(--chip);color:var(--chipText);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">${s.score}</span>
+            <span style="flex:1;min-width:0;">
+              <div style="font-weight:700;font-size:13.5px;">${s.label}</div>
+              <div style="font-size:11.5px;color:var(--inkSoft);">${s.desc}</div>
+            </span>
+          </button>`).join("")}
+        </div>
+      </div>
+      ${chipField("便の色（あれば選択）", STOOL_COLORS, sub.stoolColor, "stoolColor")}
+      ${multiChipField("気になる様子（あれば選択）", STOOL_CONCERNS, sub.concerns, "concerns")}
+      ${renderRecordPhotoField()}
+    `;
   } else if(catKey === "weight"){
     fields = `<label class="field"><div class="field-label">体重（kg）</div><input id="rf-weight" type="number" step="0.01" placeholder="例：4.20" value="${editRecord?editRecord.value:''}"></label>`;
   } else if(catKey === "health"){
@@ -1463,6 +1556,7 @@ function renderRecordModal(){
       ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
       <div id="rf-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;">
+        ${editRecord ? "" : `<button class="btn-secondary" onclick="closeModal()">キャンセル</button>`}
         <button id="rf-submit" class="btn-primary" style="flex:1;" onclick="saveRecordFromModal()">${editRecord?'保存する':'記録する'}</button>
         ${editRecord ? `<button class="btn-danger" onclick="deleteRecordFromModal()">削除</button>` : ""}
       </div>
