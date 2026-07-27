@@ -339,7 +339,12 @@ function summarizeRecord(r){
     case "medication": return [r.name, r.memo].filter(Boolean).join(" ・ ");
     case "trimming": return [r.shop, r.staff, r.nextDate?`次回 ${r.nextDate}`:"", r.memo].filter(Boolean).join(" ・ ");
     default:
-      if(PREV_BY_KEY[r.type]) return r.memo || `${PREV_BY_KEY[r.type].label}を記録`;
+      if(PREV_BY_KEY[r.type]){
+        if(PREV_BY_KEY[r.type].group === "vaccine"){
+          return [r.hospital, r.nextDue?`次回 ${r.nextDue}`:"", r.memo].filter(Boolean).join(" ・ ") || `${PREV_BY_KEY[r.type].label}接種を記録`;
+        }
+        return r.memo || `${PREV_BY_KEY[r.type].label}を記録`;
+      }
       return r.memo || "";
   }
 }
@@ -357,7 +362,11 @@ function recordDetailText(r){
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
     case "medication": return [r.name, r.memo].filter(Boolean).join(" ・ ");
     case "trimming": return [r.shop, r.staff, r.nextDate?`次回 ${r.nextDate}`:"", r.memo].filter(Boolean).join(" ・ ");
-    default: return r.memo || "";
+    default:
+      if(PREV_BY_KEY[r.type] && PREV_BY_KEY[r.type].group === "vaccine"){
+        return [r.hospital, r.vet, r.nextDue?`次回 ${r.nextDue}`:"", r.certNumber?`済票番号 ${r.certNumber}`:"", r.memo].filter(Boolean).join(" ・ ");
+      }
+      return r.memo || "";
   }
 }
 function recordBadge(r){
@@ -749,10 +758,10 @@ function openEditRecordById(id){
 async function saveRecordFromModal(){
   const catKey = state.modal.catKey;
   const editRecord = state.modal.editRecord;
-  const dateVal = document.getElementById("rf-date").value;
-  const timeVal = document.getElementById("rf-time").value || "00:00";
-  const memo = document.getElementById("rf-memo") ? document.getElementById("rf-memo").value.trim() : "";
   const val = (id) => { const el = document.getElementById(id); return el ? el.value : ""; };
+  const dateVal = val("rf-date");
+  const timeVal = val("rf-time") || "00:00";
+  const memo = document.getElementById("rf-memo") ? document.getElementById("rf-memo").value.trim() : "";
   if(!dateVal){ document.getElementById("rf-err").textContent = "日付を入力してください"; return; }
   let rec = {
     type: catKey,
@@ -793,6 +802,12 @@ async function saveRecordFromModal(){
     if(catKey === "medication"){ rec.name = val("rf-medname"); }
     if(catKey === "trimming"){ rec.shop = val("rf-shop"); rec.staff = val("rf-staff"); rec.nextDate = val("rf-nextdate"); }
   }
+  if(PREV_BY_KEY[catKey] && PREV_BY_KEY[catKey].group === "vaccine"){
+    rec.nextDue = val("rf-nextdue");
+    rec.hospital = val("rf-hospital");
+    rec.vet = val("rf-vet");
+    if(catKey === "vax_rabies"){ rec.certNumber = val("rf-certnumber"); }
+  }
 
   const btn = document.getElementById("rf-submit");
   btn.disabled = true; btn.textContent = "保存中…";
@@ -810,11 +825,15 @@ async function saveRecordFromModal(){
     if(catKey === "trimming" && rec.nextDate){ await upcomingRef().doc("trimming").set({ label:"トリミング", date: rec.nextDate, memo: rec.memo }); }
     if(PREV_BY_KEY[catKey]){
       const item = PREV_BY_KEY[catKey];
-      const next = new Date(rec.datetime);
-      next.setDate(next.getDate() + item.intervalDays);
+      let dueDate = rec.nextDue || "";
+      if(!dueDate){
+        const next = new Date(rec.datetime);
+        next.setDate(next.getDate() + item.intervalDays);
+        dueDate = localDayStr(next);
+      }
       await upcomingRef().doc(catKey).set({
         label: `${item.label}${item.group==='vaccine'?'接種':'投与'}`,
-        date: localDayStr(next),
+        date: dueDate,
         memo: rec.memo,
       });
     }
@@ -1544,6 +1563,8 @@ function renderRecordModal(){
   const catKey = state.modal.catKey;
   const editRecord = state.modal.editRecord;
   const cat = CAT_BY_KEY[catKey] || PREV_BY_KEY[catKey];
+  const prevItem = PREV_BY_KEY[catKey];
+  const isVaccine = prevItem && prevItem.group === "vaccine";
   const sub = state.modalSub;
   let fields = "";
   if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
@@ -1609,23 +1630,48 @@ function renderRecordModal(){
         <label class="field"><div class="field-label">担当者（任意）</div><input id="rf-staff" value="${esc(editRecord?editRecord.staff||'':'')}"></label>
       </div>
       <label class="field"><div class="field-label">次回の予定（任意）</div><input id="rf-nextdate" type="date" value="${esc(editRecord?editRecord.nextDate||'':'')}"></label>`;
+  } else if(isVaccine){
+    const baseDate = editRecord ? toLocalInputValue(editRecord.datetime).slice(0,10) : (state.modal.presetDay || localDayStr(new Date()));
+    let nextDueDefault = editRecord && editRecord.nextDue ? editRecord.nextDue : "";
+    if(!nextDueDefault){
+      const d = new Date(baseDate+"T00:00:00");
+      d.setDate(d.getDate() + prevItem.intervalDays);
+      nextDueDefault = localDayStr(d);
+    }
+    fields = `
+      <label class="field"><div class="field-label">次回予定（自動計算・変更可）</div><input id="rf-nextdue" type="date" value="${esc(nextDueDefault)}"></label>
+      <label class="field"><div class="field-label">動物病院（任意）</div><input id="rf-hospital" placeholder="例：〇〇動物病院" value="${esc(editRecord?editRecord.hospital||'':'')}"></label>
+      <label class="field"><div class="field-label">担当獣医師（任意）</div><input id="rf-vet" placeholder="例：△△先生" value="${esc(editRecord?editRecord.vet||'':'')}"></label>
+      ${catKey==="vax_rabies" ? `
+      <div class="card" style="padding:14px;margin:6px 0 14px;background:var(--coralSoft);">
+        <div style="font-weight:700;font-size:13px;color:var(--coralDeep);margin-bottom:8px;">🏷️ 狂犬病予防注射済票</div>
+        <label class="field" style="margin-bottom:6px;"><div class="field-label">注射済票番号（任意）</div><input id="rf-certnumber" placeholder="例：2026-12345" value="${esc(editRecord?editRecord.certNumber||'':'')}"></label>
+        <div style="font-size:11px;color:var(--coralDeep);line-height:1.6;">注射済票は市区町村が交付する公的な標識です。番号・形式は自治体ごとに異なります。ここでの記録は補助的な控えとしてご利用ください。</div>
+      </div>` : ""}
+    `;
   }
   const dtDate = editRecord ? toLocalInputValue(editRecord.datetime).slice(0,10) : (state.modal.presetDay || localDayStr(new Date()));
   const dtTime = editRecord ? toLocalInputValue(editRecord.datetime).slice(11,16) : (state.modal.presetDay ? "12:00" : nowLocalInput().slice(11,16));
   const memoValue = editRecord ? esc(editRecord.memo||"") : "";
+  const modalTitle = isVaccine ? `${cat.label}ワクチンを${editRecord?'編集':'記録'}` : `${cat.label}を${editRecord?'編集':'記録'}`;
   return `
   <div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
     <div class="modal-sheet" onclick="event.stopPropagation()">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <div class="display" style="font-weight:700;font-size:19px;">${cat.label}を${editRecord?'編集':'記録'}</div>
+        <div class="display" style="font-weight:700;font-size:19px;">${modalTitle}</div>
         <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
       </div>
+      ${isVaccine ? `
+      <label class="field"><div class="field-label">接種した日</div><input id="rf-date" type="date" value="${dtDate}"></label>
+      <input id="rf-time" type="hidden" value="12:00">
+      ` : `
       <div class="field-row">
         <label class="field"><div class="field-label">日付</div><input id="rf-date" type="date" value="${dtDate}"></label>
         <label class="field"><div class="field-label">時刻</div><input id="rf-time" type="time" value="${dtTime}"></label>
       </div>
+      `}
       ${fields}
-      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2">${memoValue}</textarea></label>
+      <label class="field"><div class="field-label">メモ（任意）</div><textarea id="rf-memo" rows="2" placeholder="${isVaccine?'ロット番号・体調など':''}">${memoValue}</textarea></label>
       ${catKey==="health" ? `<div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※ここでの記録は診断ではありません。気になる様子があるときは動物病院にご相談ください。</div>` : ""}
       <div id="rf-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;">
