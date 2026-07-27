@@ -1134,8 +1134,10 @@ function renderHome(){
     return { type:e.type, label: meta.label, date: e.date, memo: e.memo, source:"event", id:e.id };
   });
   const upcomingSoon = [...autoUpcoming, ...manualUpcoming].filter(u=>{
-    const diff = (new Date(u.date) - new Date())/86400000;
-    return diff <= 14;
+    const target = new Date(u.date+"T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    const diffDays = Math.round((target-today)/86400000);
+    return diffDays >= 0 && diffDays <= 14;
   }).sort((a,b)=> new Date(a.date)-new Date(b.date));
 
   return `
