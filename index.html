@@ -267,6 +267,7 @@ const CATEGORIES = [
   {key:"pee", label:"おしっこ", emoji:"💧", quick:"binary"},
   {key:"poop", label:"うんち", emoji:"💩", quick:"binary"},
   {key:"vomit", label:"吐いた", emoji:"🤢", quick:false},
+  {key:"concern", label:"気になる", emoji:"👀", quick:false},
   {key:"health", label:"健康チェック", emoji:"🩺", quick:false},
   {key:"weight", label:"体重", emoji:"⚖️", quick:false},
   {key:"hospital", label:"通院", emoji:"🏥", quick:false},
@@ -274,7 +275,7 @@ const CATEGORIES = [
   {key:"trimming", label:"トリミング", emoji:"✂️", quick:false},
 ];
 const CAT_BY_KEY = Object.fromEntries(CATEGORIES.map(c=>[c.key,c]));
-const DAILY_CATEGORIES = CATEGORIES.filter(c => ["food","water","pee","poop","vomit","health"].includes(c.key));
+const DAILY_CATEGORIES = CATEGORIES.filter(c => ["food","water","pee","poop","vomit","concern","health"].includes(c.key));
 const HEALTH_CATEGORIES = CATEGORIES.filter(c => ["weight","hospital","medication","trimming"].includes(c.key));
 
 const PREVENTIVE_ITEMS = [
