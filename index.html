@@ -291,6 +291,7 @@ const ALL_TYPE_META = { ...CAT_BY_KEY, ...PREV_BY_KEY };
 /* おしっこ・うんちの詳細記録用の選択肢 */
 const URINE_COLORS = ["通常","濃い","ピンク・赤"];
 const URINE_AMOUNTS = ["多い","普通","少ない","出ない"];
+const STOOL_AMOUNTS = ["多い","普通","少ない","出ない"];
 const STOOL_SCALE = [
   { score:1, label:"非常に硬い", desc:"コロコロとして乾燥し、崩れやすい状態です。" },
   { score:2, label:"やや硬い", desc:"ソーセージ状ですが表面がでこぼこしており、通常よりやや硬めの状態です。" },
@@ -333,7 +334,7 @@ function summarizeRecord(r){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "お水を記録";
     case "pee": return [(r.status==="bad"?"失敗":"成功"), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
-    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolAmount, r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
     case "vomit": return [r.vomitContent, r.count?`${r.count}回`:"", r.memo].filter(Boolean).join(" ・ ") || "吐いたことを記録";
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
@@ -357,7 +358,7 @@ function recordDetailText(r){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
     case "pee": return [r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
-    case "poop": return [r.stoolScore?`便スコア${r.stoolScore}（${(STOOL_SCALE.find(s=>s.score===r.stoolScore)||{}).label||""}）`:"", r.stoolColor, (r.concerns&&r.concerns.length?r.concerns.join("・"):""), r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [r.stoolScore?`便スコア${r.stoolScore}（${(STOOL_SCALE.find(s=>s.score===r.stoolScore)||{}).label||""}）`:"", r.stoolAmount, r.stoolColor, (r.concerns&&r.concerns.length?r.concerns.join("・"):""), r.memo].filter(Boolean).join(" ・ ");
     case "vomit": return [r.vomitContent, r.count?`${r.count}回`:"", r.memo].filter(Boolean).join(" ・ ");
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
@@ -723,6 +724,7 @@ function openRecordModal(catKey, editRecord, presetDay){
     urineColor: (editRecord && editRecord.urineColor) || "",
     urineAmount: (editRecord && editRecord.urineAmount) || "",
     stoolScore: (editRecord && editRecord.stoolScore) || "",
+    stoolAmount: (editRecord && editRecord.stoolAmount) || "",
     stoolColor: (editRecord && editRecord.stoolColor) || "",
     concerns: (editRecord && editRecord.concerns) || [],
     vomitContent: (editRecord && editRecord.vomitContent) || "",
@@ -784,6 +786,7 @@ async function saveRecordFromModal(){
     }
     if(catKey === "poop"){
       rec.stoolScore = state.modalSub.stoolScore || "";
+      rec.stoolAmount = state.modalSub.stoolAmount || "";
       rec.stoolColor = state.modalSub.stoolColor || "";
       rec.concerns = state.modalSub.concerns || [];
       rec.photo = state.modalPhoto || null;
@@ -1601,6 +1604,7 @@ function renderRecordModal(){
           </button>`).join("")}
         </div>
       </div>
+      ${chipField("量（あれば選択）", STOOL_AMOUNTS, sub.stoolAmount, "stoolAmount")}
       ${chipField("便の色（あれば選択）", STOOL_COLORS, sub.stoolColor, "stoolColor")}
       ${multiChipField("気になる様子（あれば選択）", STOOL_CONCERNS, sub.concerns, "concerns")}
       ${renderRecordPhotoField()}
