@@ -1240,12 +1240,17 @@ async function restoreBackupFile(input){
   const btn = document.getElementById("backup-restore-btn");
   if(btn){ btn.disabled = true; btn.textContent = "復元中…"; }
   try{
+    // 表示順はFirestore側のorderBy()が制御するため、ここでのソートは
+    // データの一貫性・デバッグのしやすさのため。datetime/dateの値自体は
+    // バックアップの内容をそのまま書き戻す（現在時刻での上書きはしない）。
+    const sortedRecords = [...data.records].sort((a,b) => new Date(a.datetime||0) - new Date(b.datetime||0));
+    const sortedDiary = [...data.diary].sort((a,b) => new Date(a.date||0) - new Date(b.date||0));
     await deleteAllDocs(recordsRef());
     await deleteAllDocs(diaryRef());
     await deleteAllDocs(upcomingRef());
     if(data.pet) await groupRef().set(data.pet);
-    await restoreDocsInto(recordsRef(), data.records);
-    await restoreDocsInto(diaryRef(), data.diary);
+    await restoreDocsInto(recordsRef(), sortedRecords);
+    await restoreDocsInto(diaryRef(), sortedDiary);
     await restoreDocsInto(upcomingRef(), data.upcoming);
   }catch(e){
     alert("Firestoreへの書き込みに失敗しました。通信状況を確認してもう一度お試しください。");
