@@ -289,6 +289,7 @@ const CATEGORIES = [
   {key:"pee", label:"おしっこ", emoji:"💧", quick:"binary"},
   {key:"poop", label:"うんち", emoji:"💩", quick:"binary"},
   {key:"vomit", label:"吐いた", emoji:"🤢", quick:false},
+  {key:"walk", label:"散歩", emoji:"🚶", quick:false},
   {key:"concern", label:"気になる", emoji:"👀", quick:false},
   {key:"health", label:"健康チェック", emoji:"🩺", quick:false},
   {key:"weight", label:"体重", emoji:"⚖️", quick:false},
@@ -297,7 +298,7 @@ const CATEGORIES = [
   {key:"trimming", label:"トリミング", emoji:"✂️", quick:false},
 ];
 const CAT_BY_KEY = Object.fromEntries(CATEGORIES.map(c=>[c.key,c]));
-const DAILY_CATEGORIES = CATEGORIES.filter(c => ["food","water","pee","poop","vomit","concern","health"].includes(c.key));
+const DAILY_CATEGORIES = CATEGORIES.filter(c => ["food","water","pee","poop","vomit","walk","concern","health"].includes(c.key));
 const HEALTH_CATEGORIES = CATEGORIES.filter(c => ["weight","hospital","medication","trimming"].includes(c.key));
 
 const PREVENTIVE_ITEMS = [
@@ -359,6 +360,7 @@ function summarizeRecord(r){
     case "pee": return [(r.status==="bad"?"失敗":"成功"), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
     case "poop": return [(r.status==="bad"?"失敗":"成功"), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolAmount, r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
     case "vomit": return [r.vomitContent, r.count?`${r.count}回`:"", r.memo].filter(Boolean).join(" ・ ") || "吐いたことを記録";
+    case "walk": return [r.duration?`${r.duration}分`:"", r.distance?`${r.distance}km`:"", r.condition, r.memo].filter(Boolean).join(" ・ ") || "散歩を記録";
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
@@ -383,6 +385,7 @@ function recordDetailText(r){
     case "pee": return [r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
     case "poop": return [r.stoolScore?`便スコア${r.stoolScore}（${(STOOL_SCALE.find(s=>s.score===r.stoolScore)||{}).label||""}）`:"", r.stoolAmount, r.stoolColor, (r.concerns&&r.concerns.length?r.concerns.join("・"):""), r.memo].filter(Boolean).join(" ・ ");
     case "vomit": return [r.vomitContent, r.count?`${r.count}回`:"", r.memo].filter(Boolean).join(" ・ ");
+    case "walk": return [r.duration?`${r.duration}分`:"", r.distance?`${r.distance}km`:"", r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
     case "health": return [r.condition, r.memo].filter(Boolean).join(" ・ ");
     case "hospital": return [r.reason, r.cost?`¥${r.cost}`:"", r.nextVisit?`次回 ${r.nextVisit}`:"", r.memo].filter(Boolean).join(" ・ ");
@@ -858,6 +861,11 @@ async function saveRecordFromModal(){
       rec.concerns = state.modalSub.concerns || [];
       rec.photo = state.modalPhoto || null;
       rec.status = state.modalSub.status === "bad" ? "bad" : "good";
+    }
+    if(catKey === "walk"){
+      rec.duration = val("rf-duration") ? Number(val("rf-duration")) : null;
+      rec.distance = val("rf-distance") ? Number(val("rf-distance")) : null;
+      rec.condition = state.modalSub.condition || "";
     }
     if(catKey === "vomit"){
       rec.vomitContent = state.modalSub.vomitContent || "";
@@ -1696,6 +1704,14 @@ function renderRecordModal(){
       ${chipField("便の色（あれば選択）", STOOL_COLORS, sub.stoolColor, "stoolColor")}
       ${multiChipField("気になる様子（あれば選択）", STOOL_CONCERNS, sub.concerns, "concerns")}
       ${renderRecordPhotoField()}
+    `;
+  } else if(catKey === "walk"){
+    fields = `
+      <div class="field-row">
+        <label class="field"><div class="field-label">時間（分・任意）</div><input id="rf-duration" type="number" min="1" step="1" placeholder="例：20" value="${fv('rf-duration', editRecord&&editRecord.duration?editRecord.duration:'')}"></label>
+        <label class="field"><div class="field-label">距離（km・任意）</div><input id="rf-distance" type="number" step="0.1" min="0" placeholder="例：1.5" value="${fv('rf-distance', editRecord&&editRecord.distance?editRecord.distance:'')}"></label>
+      </div>
+      ${chipField("様子（あれば選択）", ["元気","普通","いまいち"], sub.condition, "condition")}
     `;
   } else if(catKey === "vomit"){
     fields = `
