@@ -762,7 +762,7 @@ async function quickLog(catKey, extra){
 
 /* ================= record modal (detail form, create & edit) ================= */
 function openRecordModal(catKey, editRecord, presetDay){
-  state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null, pendingAutofocus: true };
+  state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null };
   state.modalSub = {
     amount: (editRecord && editRecord.amount) || "ふつう",
     status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "good",
@@ -779,14 +779,14 @@ function openRecordModal(catKey, editRecord, presetDay){
   render();
 }
 function openDiaryModal(editEntry){
-  state.modal = { type:"diary", editEntry: editEntry || null, pendingAutofocus: true };
+  state.modal = { type:"diary", editEntry: editEntry || null };
   state.modalPhoto = editEntry ? (editEntry.photo || null) : null;
   state.modalSub = { mood: (editEntry && editEntry.mood) || "元気" };
   render();
 }
 function openEventModal(day, editEventId){
   const editEvent = editEventId ? (state.calendarEvents.find(e=>e.id===editEventId) || state.homeEvents.find(e=>e.id===editEventId)) : null;
-  state.modal = { type:"event", day: editEvent ? editEvent.date : day, editEvent: editEvent || null, pendingAutofocus: true };
+  state.modal = { type:"event", day: editEvent ? editEvent.date : day, editEvent: editEvent || null };
   state.modalSub = { eventType: (editEvent && editEvent.type) || "hospital" };
   render();
 }
@@ -2172,20 +2172,6 @@ function render(){
     ${state.toast ? `<div class="toast">${esc(state.toast.message)}${state.toast.undo ? `<button class="toast-undo" onclick="runToastUndo()">取り消す</button>` : ""}</div>` : ""}
   `;
   restoreFocusState(focusInfo);
-  if(state.modal && state.modal.pendingAutofocus){
-    state.modal.pendingAutofocus = false;
-    const memoFieldId = { record:"rf-memo", diary:"df-caption", event:"ev-memo" }[state.modal.type];
-    if(memoFieldId){
-      const memoEl = document.getElementById(memoFieldId);
-      if(memoEl){
-        memoEl.focus();
-        const len = memoEl.value.length;
-        if(typeof memoEl.setSelectionRange === "function"){
-          try{ memoEl.setSelectionRange(len, len); }catch(e){}
-        }
-      }
-    }
-  }
   if(state.tab === "weight") setTimeout(drawWeightChart, 30);
 }
 
