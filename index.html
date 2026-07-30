@@ -92,6 +92,12 @@
   .chip-wide.wide-not.active{border-color:transparent;background:var(--coral);color:#fff;}
   .chip-wide.wide-unknown.active{border-color:var(--coral);background:var(--coralSoft);color:var(--coralSoftText);}
   .tip-box{background:var(--coralSoft);color:var(--coralSoftText);border-radius:14px;padding:14px 16px;font-size:12.5px;line-height:1.7;margin:6px 0 16px;}
+  .ios-switch{position:relative;display:inline-block;width:46px;height:27px;flex-shrink:0;}
+  .ios-switch input{opacity:0;width:0;height:0;position:absolute;}
+  .ios-switch .ios-slider{position:absolute;inset:0;background:#DFDDD8;transition:background .18s;border-radius:999px;cursor:pointer;}
+  .ios-switch .ios-slider:before{content:"";position:absolute;height:23px;width:23px;left:2px;top:2px;background:#fff;transition:transform .18s;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.25);}
+  .ios-switch input:checked + .ios-slider{background:var(--coral);}
+  .ios-switch input:checked + .ios-slider:before{transform:translateX(19px);}
   .modal-backdrop{position:fixed;inset:0;background:rgba(59,46,39,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;box-sizing:border-box;}
   .modal-sheet{background:#fff;width:100%;max-width:480px;min-width:0;border-radius:22px;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;}
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom);}
@@ -167,6 +173,17 @@ const eventsRef = () => groupRef().collection('events');
 /* ================= local (per-device) name ================= */
 function getMyName(){ return localStorage.getItem("bukuroku_myname") || ""; }
 function setMyName(n){ localStorage.setItem("bukuroku_myname", n); }
+function getHiddenCategories(){
+  try{ return JSON.parse(localStorage.getItem("bukuroku_hidden_cats") || "[]"); }catch(e){ return []; }
+}
+function isCategoryHidden(key){ return getHiddenCategories().includes(key); }
+function toggleCategoryHidden(key){
+  const hidden = getHiddenCategories();
+  const i = hidden.indexOf(key);
+  if(i>=0) hidden.splice(i,1); else hidden.push(key);
+  localStorage.setItem("bukuroku_hidden_cats", JSON.stringify(hidden));
+  render();
+}
 
 /* ================= toast (with optional undo action) ================= */
 function showToast(message, undoFn){
@@ -1309,7 +1326,7 @@ function renderHome(){
   </div>
 
   <div style="font-size:12.5px;font-weight:700;color:var(--inkSoft);margin:4px 2px 8px;">📋 日々のお世話</div>
-  ${state.homeLoading ? `<div style="text-align:center;padding:20px;"><span class="spin">⏳</span></div>` : renderCategoryRows(DAILY_CATEGORIES, lastByType)}
+  ${state.homeLoading ? `<div style="text-align:center;padding:20px;"><span class="spin">⏳</span></div>` : renderCategoryRows(DAILY_CATEGORIES.filter(c=>!isCategoryHidden(c.key)), lastByType)}
 
   ${renderHealthSection(lastByType)}
   `;
@@ -1375,7 +1392,7 @@ function renderHealthSection(lastByType){
 
   const vaxRows = PREVENTIVE_ITEMS.filter(p=>p.group==="vaccine").map(p=>renderPreventiveRow(p, lastByType)).join("");
   const medRows = PREVENTIVE_ITEMS.filter(p=>p.group==="medicine").map(p=>renderPreventiveRow(p, lastByType)).join("");
-  const generalRows = renderCategoryRows(HEALTH_CATEGORIES, lastByType);
+  const generalRows = renderCategoryRows(HEALTH_CATEGORIES.filter(c=>!isCategoryHidden(c.key)), lastByType);
 
   return header + `
   <div style="font-size:12px;font-weight:700;color:var(--inkSoft);margin:2px 2px 8px;">💉 予防・ワクチン</div>
@@ -1596,6 +1613,20 @@ function renderSettings(){
       このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
     </div>
     <button class="btn-danger" onclick="logout()">ログアウト</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ホームに表示する項目</div>
+  <div class="card" style="padding:6px 16px;margin-bottom:18px;">
+    <div style="font-size:11.5px;color:var(--inkSoft);padding:10px 0 4px;line-height:1.6;">使わない項目はOFFにすると、ホーム画面から非表示にできます（この端末だけの設定です）。</div>
+    ${CATEGORIES.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 0;${i>0?'border-top:1px solid var(--line);':''}">
+      <span style="font-size:18px;flex-shrink:0;">${c.emoji}</span>
+      <span style="flex:1;min-width:0;font-weight:600;font-size:14px;">${c.label}</span>
+      <label class="ios-switch">
+        <input type="checkbox" ${isCategoryHidden(c.key)?'':'checked'} onchange="toggleCategoryHidden('${c.key}')">
+        <span class="ios-slider"></span>
+      </label>
+    </div>`).join("")}
   </div>
 
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
