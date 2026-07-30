@@ -228,6 +228,11 @@ function fmtDateHeading(iso){
   const days=["日","月","火","水","木","金","土"];
   return `${d.getMonth()+1}月${d.getDate()}日(${days[d.getDay()]})`;
 }
+function fmtDateShort(iso){
+  const d = new Date(iso);
+  const days=["日","月","火","水","木","金","土"];
+  return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+}
 function fmtTime(iso){
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -267,6 +272,11 @@ function humanAgeApprox(years, months){
 function localDayStr(input){
   const d = (input instanceof Date) ? input : new Date(input);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function maskEmail(email){
+  const m = /^(.{1,3})(.*)(@.+)$/.exec(email||"");
+  if(!m) return email||"";
+  return `${m[1]}${"•".repeat(Math.max(3, m[2].length))}${m[3]}`;
 }
 function esc(s){
   return (s==null?"":String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1821,43 +1831,6 @@ function renderSettings(){
     <button class="btn-primary" onclick="saveMyNameSetting()">保存</button>
   </div>
 
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">セキュリティ</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
-    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
-      このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
-    </div>
-    <button class="btn-danger" onclick="logout()">ログアウト</button>
-  </div>
-
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">バックアップ</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
-    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
-      記録・日記・予定・ペット情報をまとめてJSONファイルに保存したり、そこから復元したりできます。
-    </div>
-    <button id="backup-download-btn" class="btn-primary" style="margin-bottom:10px;width:100%;" onclick="downloadBackup()">バックアップをダウンロード</button>
-    <button id="backup-restore-btn" class="btn-secondary" style="width:100%;" onclick="document.getElementById('backup-file-input').click()">バックアップから復元</button>
-    <input id="backup-file-input" type="file" accept="application/json,.json" style="display:none" onchange="restoreBackupFile(this)">
-    <div style="border-top:1px solid var(--line);margin:14px 0 12px;"></div>
-    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
-      きろくの一覧をCSV（Excel・スプレッドシート用）でも書き出せます。復元はできませんが、集計や分析に使えます。
-    </div>
-    <button id="csv-download-btn" class="btn-secondary" style="width:100%;" onclick="downloadRecordsCsv()">CSVでエクスポート（きろく一覧）</button>
-  </div>
-
-  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ホームに表示する項目</div>
-  <div class="card" style="padding:6px 16px;margin-bottom:18px;">
-    <div style="font-size:11.5px;color:var(--inkSoft);padding:10px 0 4px;line-height:1.6;">使わない項目はOFFにすると、ホーム画面から非表示にできます（この端末だけの設定です）。</div>
-    ${CATEGORIES.map((c,i)=>`
-    <div style="display:flex;align-items:center;gap:12px;padding:11px 0;${i>0?'border-top:1px solid var(--line);':''}">
-      <span style="font-size:18px;flex-shrink:0;">${c.emoji}</span>
-      <span style="flex:1;min-width:0;font-weight:600;font-size:14px;">${c.label}</span>
-      <label class="ios-switch">
-        <input type="checkbox" ${isCategoryHidden(c.key)?'':'checked'} onchange="toggleCategoryHidden('${c.key}')">
-        <span class="ios-slider"></span>
-      </label>
-    </div>`).join("")}
-  </div>
-
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
   <div class="card" id="pet-settings-card" style="padding:16px;margin-bottom:18px;">
     <div style="margin-bottom:14px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
@@ -1887,6 +1860,50 @@ function renderSettings(){
     <label class="field"><div class="field-label">マイクロチップ番号（任意・15桁）</div><input id="set-pet-microchip" inputmode="numeric" maxlength="15" placeholder="15桁の数字" value="${esc(fv2('petSettingsFormValues','set-pet-microchip', pet.microchip||""))}"></label>
     <div class="tip-box">🏷️ マイクロチップは迷子や災害のときの大切な備え。登録はお住まいの国のルールに沿って行えます（PAWLOGへの入力は任意です）。</div>
     <button class="btn-primary" onclick="savePetSettings()">保存</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ホームに表示する項目</div>
+  <div class="card" style="padding:6px 16px;margin-bottom:18px;">
+    <div style="font-size:11.5px;color:var(--inkSoft);padding:10px 0 4px;line-height:1.6;">使わない項目はOFFにすると、ホーム画面から非表示にできます（この端末だけの設定です）。</div>
+    ${CATEGORIES.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 0;${i>0?'border-top:1px solid var(--line);':''}">
+      <span style="font-size:18px;flex-shrink:0;">${c.emoji}</span>
+      <span style="flex:1;min-width:0;font-weight:600;font-size:14px;">${c.label}</span>
+      <label class="ios-switch">
+        <input type="checkbox" ${isCategoryHidden(c.key)?'':'checked'} onchange="toggleCategoryHidden('${c.key}')">
+        <span class="ios-slider"></span>
+      </label>
+    </div>`).join("")}
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">バックアップ</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      記録・日記・予定・ペット情報をまとめてJSONファイルに保存したり、そこから復元したりできます。
+    </div>
+    <button id="backup-download-btn" class="btn-primary" style="margin-bottom:10px;width:100%;" onclick="downloadBackup()">バックアップをダウンロード</button>
+    <button id="backup-restore-btn" class="btn-secondary" style="width:100%;" onclick="document.getElementById('backup-file-input').click()">バックアップから復元</button>
+    <input id="backup-file-input" type="file" accept="application/json,.json" style="display:none" onchange="restoreBackupFile(this)">
+    <div style="border-top:1px solid var(--line);margin:14px 0 12px;"></div>
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      きろくの一覧をCSV（Excel・スプレッドシート用）でも書き出せます。復元はできませんが、集計や分析に使えます。
+    </div>
+    <button id="csv-download-btn" class="btn-secondary" style="width:100%;" onclick="downloadRecordsCsv()">CSVでエクスポート（きろく一覧）</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ログイン</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--mint);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🔑</div>
+      <div style="min-width:0;">
+        <div style="font-weight:700;font-size:14px;">家族共有アカウントでログイン中</div>
+        <div class="mono" style="font-size:11.5px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(maskEmail(LOGIN_EMAIL))}</div>
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:14px;line-height:1.6;">
+      同じ端末・ブラウザなら次回以降も自動でログインしたままになります。共有の端末や人に貸した端末を使っているときは、使い終わったらログアウトしておくと安心です。
+    </div>
+    <button class="btn-danger" style="width:100%;" onclick="logout()">🚪 この端末からログアウト</button>
   </div>
 
   <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;line-height:1.7;">
@@ -2302,7 +2319,7 @@ function renderWeight(){
   const minVal = log && log.length ? Math.min(...log.map(p=>p.value)) : null;
   const maxVal = log && log.length ? Math.max(...log.map(p=>p.value)) : null;
 
-  function diffBlock(label, from, isFirst){
+  function diffBlock(from, isFirst){
     if(!from || !latest || from === latest) return "";
     const d = latest.value - from.value;
     const flat = Math.abs(d) < 0.005;
@@ -2311,7 +2328,7 @@ function renderWeight(){
     const color = flat ? "var(--inkSoft)" : (up ? "var(--coral)" : "var(--mintText)");
     const arrow = flat ? "→" : (up ? "↑" : "↓");
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;${isFirst?'':'border-top:1px solid var(--line);'}">
-      <span style="font-size:13px;color:var(--inkSoft);">${label}と比較</span>
+      <span style="font-size:13px;color:var(--inkSoft);">${fmtDateShort(from.datetime)}と比較</span>
       <span class="mono" style="font-size:14px;font-weight:600;color:${color};">${arrow} ${flat?'変化なし':`${Math.abs(d).toFixed(2)} kg（${Math.abs(pct).toFixed(1)}%）`}</span>
     </div>`;
   }
@@ -2325,8 +2342,8 @@ function renderWeight(){
       </div>
       <button class="row-btn" onclick="openRecordModal('weight')">＋ 記録</button>
     </div>
-    ${prev ? diffBlock("前回", prev, true) : ""}
-    ${monthAgo ? diffBlock("1ヶ月前", monthAgo, !prev) : ""}
+    ${prev ? diffBlock(prev, true) : ""}
+    ${monthAgo ? diffBlock(monthAgo, !prev) : ""}
   </div>
 
   ${minVal!==null ? `
