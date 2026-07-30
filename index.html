@@ -762,7 +762,7 @@ async function quickLog(catKey, extra){
 
 /* ================= record modal (detail form, create & edit) ================= */
 function openRecordModal(catKey, editRecord, presetDay){
-  state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null };
+  state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null, pendingAutofocus: true };
   state.modalSub = {
     amount: (editRecord && editRecord.amount) || "ふつう",
     status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "good",
@@ -779,14 +779,14 @@ function openRecordModal(catKey, editRecord, presetDay){
   render();
 }
 function openDiaryModal(editEntry){
-  state.modal = { type:"diary", editEntry: editEntry || null };
+  state.modal = { type:"diary", editEntry: editEntry || null, pendingAutofocus: true };
   state.modalPhoto = editEntry ? (editEntry.photo || null) : null;
   state.modalSub = { mood: (editEntry && editEntry.mood) || "元気" };
   render();
 }
 function openEventModal(day, editEventId){
   const editEvent = editEventId ? (state.calendarEvents.find(e=>e.id===editEventId) || state.homeEvents.find(e=>e.id===editEventId)) : null;
-  state.modal = { type:"event", day: editEvent ? editEvent.date : day, editEvent: editEvent || null };
+  state.modal = { type:"event", day: editEvent ? editEvent.date : day, editEvent: editEvent || null, pendingAutofocus: true };
   state.modalSub = { eventType: (editEvent && editEvent.type) || "hospital" };
   render();
 }
@@ -839,7 +839,7 @@ function setPetSetupTmp(field, value){ captureFormValues('pet-setup-card','petSe
 function setPetSettingsTmp(field, value){ captureFormValues('pet-settings-card','petSettingsFormValues'); state[field] = value; render(); }
 
 function findRecordById(id){
-  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || null;
+  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || (state.weightPoints||[]).find(r=>r.id===id) || null;
 }
 function openEditRecordById(id){
   const r = findRecordById(id);
@@ -2098,18 +2098,57 @@ const TABS = [
   {key:"settings", label:"設定", emoji:"⚙️"},
 ];
 
+/* render() replaces #app's innerHTML wholesale, which destroys and recreates
+   every DOM node — including whichever <input>/<textarea> the user currently
+   has focused (e.g. typing a memo, then tapping a category chip elsewhere in
+   the same form triggers a re-render). Without this, focus silently falls
+   back to <body>, the on-screen keyboard on mobile closes, and the user has
+   to tap back into the memo field and find their place again. We snapshot
+   the focused field's id, cursor position, and the modal's scroll offset
+   right before the innerHTML swap, then restore all three right after. */
+function captureFocusState(root){
+  const active = document.activeElement;
+  if(!active || !active.id || !root.contains(active)) return null;
+  if(active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return null;
+  const scrollSheet = active.closest(".modal-sheet");
+  return {
+    id: active.id,
+    selectionStart: (typeof active.selectionStart === "number") ? active.selectionStart : null,
+    selectionEnd: (typeof active.selectionEnd === "number") ? active.selectionEnd : null,
+    sheetScrollTop: scrollSheet ? scrollSheet.scrollTop : null,
+  };
+}
+function restoreFocusState(info){
+  if(!info) return;
+  const el = document.getElementById(info.id);
+  if(!el) return;
+  el.focus({preventScroll:true});
+  if(info.selectionStart!=null && typeof el.setSelectionRange === "function"){
+    try{ el.setSelectionRange(info.selectionStart, info.selectionEnd); }catch(e){}
+  }
+  if(info.sheetScrollTop!=null){
+    const sheet = document.querySelector(".modal-sheet");
+    if(sheet) sheet.scrollTop = info.sheetScrollTop;
+  }
+}
+
 function render(){
   const app = document.getElementById("app");
+  const focusInfo = captureFocusState(app);
+
   if(!authReady){
     app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;"><span class="spin" style="font-size:24px;">⏳</span></div>`;
+    restoreFocusState(focusInfo);
     return;
   }
   if(!state.loggedIn){
     app.innerHTML = renderLogin();
+    restoreFocusState(focusInfo);
     return;
   }
   if(!state.pet){
     app.innerHTML = renderPetSetup();
+    restoreFocusState(focusInfo);
     return;
   }
 
@@ -2132,6 +2171,21 @@ function render(){
     ${renderModal()}
     ${state.toast ? `<div class="toast">${esc(state.toast.message)}${state.toast.undo ? `<button class="toast-undo" onclick="runToastUndo()">取り消す</button>` : ""}</div>` : ""}
   `;
+  restoreFocusState(focusInfo);
+  if(state.modal && state.modal.pendingAutofocus){
+    state.modal.pendingAutofocus = false;
+    const memoFieldId = { record:"rf-memo", diary:"df-caption", event:"ev-memo" }[state.modal.type];
+    if(memoFieldId){
+      const memoEl = document.getElementById(memoFieldId);
+      if(memoEl){
+        memoEl.focus();
+        const len = memoEl.value.length;
+        if(typeof memoEl.setSelectionRange === "function"){
+          try{ memoEl.setSelectionRange(len, len); }catch(e){}
+        }
+      }
+    }
+  }
   if(state.tab === "weight") setTimeout(drawWeightChart, 30);
 }
 
@@ -2183,12 +2237,34 @@ function renderWeight(){
     <div><div class="mono" style="font-size:17px;">${log.length}</div><div style="font-size:11px;color:var(--inkSoft);">記録数</div></div>
   </div>` : ""}
 
-  <div class="card" style="padding:16px 8px 8px;">
+  <div class="card" style="padding:16px 8px 8px;margin-bottom:16px;">
     ${log===null ? `<div style="text-align:center;padding:30px;"><span class="spin">⏳</span></div>` :
       log.length<2 ? `<div style="text-align:center;padding:24px 12px;color:var(--inkSoft);font-size:13px;">体重の記録が2件以上になるとグラフが表示されます。</div>` :
       `<canvas id="weight-canvas" height="220"></canvas>`
     }
-  </div>`;
+  </div>
+
+  ${log && log.length ? renderWeightList(log) : ""}`;
+}
+/* 体重画面の記録一覧（日付でグループ化し、タップで編集モーダルを開く） */
+function renderWeightList(log){
+  const grouped = {};
+  log.forEach(r => {
+    const day = r.datetime ? localDayStr(r.datetime) : "";
+    if(!grouped[day]) grouped[day] = [];
+    grouped[day].push(r);
+  });
+  const dayKeys = Object.keys(grouped).sort().reverse();
+  return `
+  <div style="font-weight:700;font-size:14px;margin-bottom:8px;">記録一覧</div>
+  ${dayKeys.map(day => `
+    <div style="margin-bottom:16px;">
+      <div class="mono" style="font-size:12px;color:var(--inkSoft);margin-bottom:6px;">${fmtDateHeading(day)}</div>
+      <div class="card" style="overflow:hidden;">
+        ${grouped[day].slice().reverse().map((r,i)=> renderRecordRow(r, {divider:i>0})).join("")}
+      </div>
+    </div>`).join("")}
+  <div style="font-size:11.5px;color:var(--inkSoft);text-align:center;margin-top:2px;">記録をタップすると編集・削除できます</div>`;
 }
 
 render();
