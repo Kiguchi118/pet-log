@@ -1163,6 +1163,107 @@ async function savePetSettings(){
   showToast("ペット情報を保存しました");
 }
 
+/* ================= backup / restore (Firestore, no paid features) ================= */
+async function fetchAllDocs(ref){
+  const snap = await ref.get();
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function deleteAllDocs(ref){
+  const snap = await ref.get();
+  const docs = snap.docs;
+  const batchSize = 400;
+  for(let i=0;i<docs.length;i+=batchSize){
+    const batch = db.batch();
+    docs.slice(i,i+batchSize).forEach(d=>batch.delete(d.ref));
+    await batch.commit();
+  }
+}
+async function restoreDocsInto(ref, arr){
+  const batchSize = 400;
+  for(let i=0;i<arr.length;i+=batchSize){
+    const batch = db.batch();
+    arr.slice(i,i+batchSize).forEach(item=>{
+      const { id, ...rest } = item || {};
+      const docRef = id ? ref.doc(String(id)) : ref.doc();
+      batch.set(docRef, rest);
+    });
+    await batch.commit();
+  }
+}
+async function downloadBackup(){
+  const btn = document.getElementById("backup-download-btn");
+  if(btn){ btn.disabled = true; btn.textContent = "作成中…"; }
+  try{
+    const petSnap = await groupRef().get();
+    const pet = petSnap.exists ? petSnap.data() : null;
+    const [records, diary, upcoming] = await Promise.all([
+      fetchAllDocs(recordsRef()),
+      fetchAllDocs(diaryRef()),
+      fetchAllDocs(upcomingRef()),
+    ]);
+    const backup = { version:1, exportedAt:new Date().toISOString(), familyId:FAMILY_ID, pet, records, diary, upcoming };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const d = new Date();
+    const pad = n => String(n).padStart(2,"0");
+    const fname = `bukuroku-backup-${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.json`;
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }catch(e){
+    alert("バックアップの作成に失敗しました。通信状況を確認してもう一度お試しください。");
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = "バックアップをダウンロード"; }
+  }
+}
+async function restoreBackupFile(input){
+  const file = input.files && input.files[0];
+  if(!file) return;
+  if(!confirm("現在のデータをバックアップの内容で置き換えます。よろしいですか？")){ input.value = ""; return; }
+
+  let data;
+  try{
+    const text = await file.text();
+    data = JSON.parse(text);
+  }catch(e){
+    alert("バックアップファイルの読み込みに失敗しました。ファイルが壊れている可能性があります。");
+    input.value = "";
+    return;
+  }
+  if(!data || typeof data !== "object" || !Array.isArray(data.records) || !Array.isArray(data.diary) || !Array.isArray(data.upcoming)){
+    alert("バックアップファイルの形式が正しくありません。");
+    input.value = "";
+    return;
+  }
+
+  const btn = document.getElementById("backup-restore-btn");
+  if(btn){ btn.disabled = true; btn.textContent = "復元中…"; }
+  try{
+    await deleteAllDocs(recordsRef());
+    await deleteAllDocs(diaryRef());
+    await deleteAllDocs(upcomingRef());
+    if(data.pet) await groupRef().set(data.pet);
+    await restoreDocsInto(recordsRef(), data.records);
+    await restoreDocsInto(diaryRef(), data.diary);
+    await restoreDocsInto(upcomingRef(), data.upcoming);
+  }catch(e){
+    alert("Firestoreへの書き込みに失敗しました。通信状況を確認してもう一度お試しください。");
+    if(btn){ btn.disabled = false; btn.textContent = "バックアップから復元"; }
+    input.value = "";
+    return;
+  }
+  input.value = "";
+  if(btn){ btn.disabled = false; btn.textContent = "バックアップから復元"; }
+  await loadPet();
+  render();
+  await loadHome();
+  await loadHistory();
+  await loadWeight();
+  await loadDiary();
+  showToast("バックアップから復元しました");
+}
+
 function switchTab(tab){
   if(state.tab === "settings" && tab !== "settings") state.petSettingsFormValues = null;
   if(tab === "settings" && state.tab !== "settings" && state.pet){
@@ -1613,6 +1714,16 @@ function renderSettings(){
       このアプリはパスワードでログイン中です。同じ端末・ブラウザなら次回以降も自動でログインしたままになります。
     </div>
     <button class="btn-danger" onclick="logout()">ログアウト</button>
+  </div>
+
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">バックアップ</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      記録・日記・予定・ペット情報をまとめてJSONファイルに保存したり、そこから復元したりできます。
+    </div>
+    <button id="backup-download-btn" class="btn-primary" style="margin-bottom:10px;width:100%;" onclick="downloadBackup()">バックアップをダウンロード</button>
+    <button id="backup-restore-btn" class="btn-secondary" style="width:100%;" onclick="document.getElementById('backup-file-input').click()">バックアップから復元</button>
+    <input id="backup-file-input" type="file" accept="application/json,.json" style="display:none" onchange="restoreBackupFile(this)">
   </div>
 
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ホームに表示する項目</div>
