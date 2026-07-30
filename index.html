@@ -216,6 +216,15 @@ function ageInfo(birthday, species){
   if(months<0){ years--; months+=12; }
   return { days, years, months, stage: stageLabel(species, years) };
 }
+function daysSince(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+"T00:00:00"), now = new Date(); now.setHours(0,0,0,0);
+  const days = Math.floor((now-d)/86400000);
+  return days >= 0 ? days : null;
+}
+function isValidMicrochip(v){
+  return !v || /^\d{15}$/.test(v);
+}
 function humanAgeApprox(years, months){
   const t = years + months/12;
   if(t <= 0) return null;
@@ -691,8 +700,11 @@ async function submitPetSetup(){
   const breed = document.getElementById("pet-breed").value.trim();
   const color = document.getElementById("pet-color").value.trim();
   const birthday = document.getElementById("pet-birthday").value;
+  const adoptedDate = document.getElementById("pet-adopted").value;
+  const microchip = document.getElementById("pet-microchip").value.trim();
+  if(!isValidMicrochip(microchip)){ document.getElementById("pet-err").textContent = "マイクロチップ番号は15桁の数字で入力してください"; return; }
   const photo = state.tmpPetPhoto || null;
-  const pet = { name, species, gender, neuter, breed, color, birthday, photo, createdAt: new Date().toISOString() };
+  const pet = { name, species, gender, neuter, breed, color, birthday, adoptedDate, microchip, photo, createdAt: new Date().toISOString() };
   await groupRef().set(pet, { merge: true });
   state.pet = pet;
   state.tab = "home";
@@ -772,6 +784,26 @@ function fv(id, def){
   return (state.modal && state.modal.formValues && state.modal.formValues[id] !== undefined) ? state.modal.formValues[id] : def;
 }
 function setModalSub(field, value){ captureModalFormValues(); state.modalSub[field] = value; render(); }
+
+/* Same problem as above also affects the (non-modal) pet setup and pet
+   settings screens: picking a 種類/性別/避妊・去勢 chip re-renders that
+   whole screen, which would otherwise wipe out anything typed into the
+   plain text/date inputs (name, breed, color, birthday, adopted date,
+   microchip number) before the chip was saved. */
+function captureFormValues(containerId, storeKey){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  const vals = {};
+  container.querySelectorAll('input[id], textarea[id]').forEach(el=>{
+    vals[el.id] = (el.type === "checkbox") ? el.checked : el.value;
+  });
+  state[storeKey] = vals;
+}
+function fv2(storeKey, id, def){
+  return (state[storeKey] && state[storeKey][id] !== undefined) ? state[storeKey][id] : def;
+}
+function setPetSetupTmp(field, value){ captureFormValues('pet-setup-card','petSetupFormValues'); state[field] = value; render(); }
+function setPetSettingsTmp(field, value){ captureFormValues('pet-settings-card','petSettingsFormValues'); state[field] = value; render(); }
 
 function findRecordById(id){
   return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || null;
@@ -1081,15 +1113,20 @@ async function savePetSettings(){
   const breed = document.getElementById("set-pet-breed").value.trim();
   const color = document.getElementById("set-pet-color").value.trim();
   const birthday = document.getElementById("set-pet-birthday").value;
+  const adoptedDate = document.getElementById("set-pet-adopted").value;
+  const microchip = document.getElementById("set-pet-microchip").value.trim();
+  if(!isValidMicrochip(microchip)){ showToast("マイクロチップ番号は15桁の数字で入力してください"); return; }
   const photo = state.tmpPetPhoto !== undefined ? state.tmpPetPhoto : (state.pet.photo || null);
-  const updated = { ...state.pet, name, species, gender, neuter, breed, color, birthday, photo };
+  const updated = { ...state.pet, name, species, gender, neuter, breed, color, birthday, adoptedDate, microchip, photo };
   await groupRef().set(updated, { merge: true });
   state.pet = updated;
+  state.petSettingsFormValues = null;
   render();
   showToast("ペット情報を保存しました");
 }
 
 function switchTab(tab){
+  if(state.tab === "settings" && tab !== "settings") state.petSettingsFormValues = null;
   state.tab = tab; state.modal = null;
   render();
   if(tab === "home") loadHome();
@@ -1232,6 +1269,8 @@ function renderHome(){
       ${pet.breed ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">🐾 ${esc(pet.breed)}</span>` : ""}
       ${pet.color ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#D8CBB0;margin-right:5px;vertical-align:middle;"></span>毛色 ${esc(pet.color)}</span>` : ""}
       <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px dashed var(--mintText);margin-right:5px;vertical-align:middle;"></span>避妊・去勢 ${pet.neuter==='done'?'済':pet.neuter==='not'?'未':'不明'}</span>
+      ${pet.adoptedDate ? `<span class="chip" style="background:var(--chip);color:var(--chipText);border:none;">🏠 お迎え ${esc(pet.adoptedDate)}${daysSince(pet.adoptedDate)!=null?`（${daysSince(pet.adoptedDate)}日目）`:""}</span>` : ""}
+      ${pet.microchip ? `<span class="chip mono" style="background:var(--chip);color:var(--chipText);border:none;">💳 マイクロチップ ${esc(pet.microchip)}</span>` : ""}
     </div>` : ""}
 
     ${age ? `
@@ -1522,36 +1561,38 @@ function renderSettings(){
   </div>
 
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ペットの情報</div>
-  <div class="card" style="padding:16px;margin-bottom:18px;">
+  <div class="card" id="pet-settings-card" style="padding:16px;margin-bottom:18px;">
     <div style="margin-bottom:14px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
-    <label class="field"><div class="field-label">名前</div><input id="set-pet-name" value="${esc(pet.name)}"></label>
+    <label class="field"><div class="field-label">名前</div><input id="set-pet-name" value="${esc(fv2('petSettingsFormValues','set-pet-name', pet.name))}"></label>
     <div class="field">
       <div class="field-label">種類</div>
       <div class="chip-row">
-        <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
-        <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
-        <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
+        <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="setPetSettingsTmp('tmpSpecies','dog')">🐶 犬</button>
+        <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="setPetSettingsTmp('tmpSpecies','cat')">🐱 猫</button>
+        <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="setPetSettingsTmp('tmpSpecies','other')">🐾 その他</button>
       </div>
     </div>
     <div class="field">
       <div class="field-label">性別</div>
       <div class="chip-row">
-        <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
-        <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
-        <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
+        <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="setPetSettingsTmp('tmpGender','male')">♂ 男の子</button>
+        <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="setPetSettingsTmp('tmpGender','female')">♀ 女の子</button>
+        <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="setPetSettingsTmp('tmpGender','unknown')">不明</button>
       </div>
     </div>
-    <label class="field"><div class="field-label">犬種・猫種</div><input id="set-pet-breed" value="${esc(pet.breed||"")}"></label>
-    <label class="field"><div class="field-label">毛色</div><input id="set-pet-color" value="${esc(pet.color||"")}" placeholder="例：レッドホワイト"></label>
+    <label class="field"><div class="field-label">犬種・猫種</div><input id="set-pet-breed" value="${esc(fv2('petSettingsFormValues','set-pet-breed', pet.breed||""))}"></label>
+    <label class="field"><div class="field-label">毛色</div><input id="set-pet-color" value="${esc(fv2('petSettingsFormValues','set-pet-color', pet.color||""))}" placeholder="例：レッドホワイト"></label>
     <div class="field">
       <div class="field-label">避妊・去勢</div>
       <div class="chip-row">
-        <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="state.tmpNeuter='done';render()">済</button>
-        <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="state.tmpNeuter='not';render()">未</button>
-        <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="state.tmpNeuter='unknown';render()">不明</button>
+        <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="setPetSettingsTmp('tmpNeuter','done')">済</button>
+        <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="setPetSettingsTmp('tmpNeuter','not')">未</button>
+        <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="setPetSettingsTmp('tmpNeuter','unknown')">不明</button>
       </div>
     </div>
-    <label class="field"><div class="field-label">お誕生日</div><input id="set-pet-birthday" type="date" value="${esc(pet.birthday||"")}"></label>
+    <label class="field"><div class="field-label">お誕生日</div><input id="set-pet-birthday" type="date" value="${esc(fv2('petSettingsFormValues','set-pet-birthday', pet.birthday||""))}"></label>
+    <label class="field"><div class="field-label">迎えた日（任意）</div><input id="set-pet-adopted" type="date" value="${esc(fv2('petSettingsFormValues','set-pet-adopted', pet.adoptedDate||""))}"></label>
+    <label class="field"><div class="field-label">マイクロチップ番号（任意・15桁）</div><input id="set-pet-microchip" inputmode="numeric" maxlength="15" placeholder="例：123456789012345" value="${esc(fv2('petSettingsFormValues','set-pet-microchip', pet.microchip||""))}"></label>
     <button class="btn-primary" onclick="savePetSettings()">保存</button>
   </div>
 
@@ -1811,36 +1852,38 @@ function renderPetSetup(){
     </div>
     <div class="display" style="font-weight:700;font-size:20px;margin-bottom:4px;">この子のことを教えて</div>
     <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:22px;">あとから設定からいつでも変更できます</div>
-    <div class="card" style="width:100%;max-width:400px;padding:22px;">
+    <div class="card" id="pet-setup-card" style="width:100%;max-width:400px;padding:22px;">
       <div style="margin-bottom:16px;">${renderPetPhotoBox(state.tmpPetPhoto)}</div>
-      <label class="field"><div class="field-label">名前</div><input id="pet-name" placeholder="例：もふ"></label>
+      <label class="field"><div class="field-label">名前</div><input id="pet-name" value="${esc(fv2('petSetupFormValues','pet-name',''))}" placeholder="例：もふ"></label>
       <div class="field">
         <div class="field-label">種類</div>
         <div class="chip-row">
-          <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="state.tmpSpecies='dog';render()">🐶 犬</button>
-          <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="state.tmpSpecies='cat';render()">🐱 猫</button>
-          <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="state.tmpSpecies='other';render()">🐾 その他</button>
+          <button class="chip ${state.tmpSpecies==='dog'?'active':''}" onclick="setPetSetupTmp('tmpSpecies','dog')">🐶 犬</button>
+          <button class="chip ${state.tmpSpecies==='cat'?'active':''}" onclick="setPetSetupTmp('tmpSpecies','cat')">🐱 猫</button>
+          <button class="chip ${state.tmpSpecies==='other'?'active':''}" onclick="setPetSetupTmp('tmpSpecies','other')">🐾 その他</button>
         </div>
       </div>
       <div class="field">
         <div class="field-label">性別</div>
         <div class="chip-row">
-          <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="state.tmpGender='male';render()">♂ 男の子</button>
-          <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="state.tmpGender='female';render()">♀ 女の子</button>
-          <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="state.tmpGender='unknown';render()">不明</button>
+          <button class="chip ${state.tmpGender==='male'?'active':''}" onclick="setPetSetupTmp('tmpGender','male')">♂ 男の子</button>
+          <button class="chip ${state.tmpGender==='female'?'active':''}" onclick="setPetSetupTmp('tmpGender','female')">♀ 女の子</button>
+          <button class="chip ${state.tmpGender==='unknown'?'active':''}" onclick="setPetSetupTmp('tmpGender','unknown')">不明</button>
         </div>
       </div>
-      <label class="field"><div class="field-label">犬種・猫種（任意）</div><input id="pet-breed" placeholder="例：トイプードル"></label>
-      <label class="field"><div class="field-label">毛色（任意）</div><input id="pet-color" placeholder="例：レッドホワイト"></label>
+      <label class="field"><div class="field-label">犬種・猫種（任意）</div><input id="pet-breed" value="${esc(fv2('petSetupFormValues','pet-breed',''))}" placeholder="例：トイプードル"></label>
+      <label class="field"><div class="field-label">毛色（任意）</div><input id="pet-color" value="${esc(fv2('petSetupFormValues','pet-color',''))}" placeholder="例：レッドホワイト"></label>
       <div class="field">
         <div class="field-label">避妊・去勢</div>
         <div class="chip-row">
-          <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="state.tmpNeuter='done';render()">済</button>
-          <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="state.tmpNeuter='not';render()">未</button>
-          <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="state.tmpNeuter='unknown';render()">不明</button>
+          <button class="chip ${state.tmpNeuter==='done'?'active':''}" onclick="setPetSetupTmp('tmpNeuter','done')">済</button>
+          <button class="chip ${state.tmpNeuter==='not'?'active':''}" onclick="setPetSetupTmp('tmpNeuter','not')">未</button>
+          <button class="chip ${state.tmpNeuter==='unknown'?'active':''}" onclick="setPetSetupTmp('tmpNeuter','unknown')">不明</button>
         </div>
       </div>
-      <label class="field"><div class="field-label">お誕生日（任意）</div><input id="pet-birthday" type="date"></label>
+      <label class="field"><div class="field-label">お誕生日（任意）</div><input id="pet-birthday" type="date" value="${esc(fv2('petSetupFormValues','pet-birthday',''))}"></label>
+      <label class="field"><div class="field-label">迎えた日（任意）</div><input id="pet-adopted" type="date" value="${esc(fv2('petSetupFormValues','pet-adopted',''))}"></label>
+      <label class="field"><div class="field-label">マイクロチップ番号（任意・15桁）</div><input id="pet-microchip" inputmode="numeric" maxlength="15" placeholder="例：123456789012345" value="${esc(fv2('petSetupFormValues','pet-microchip',''))}"></label>
       <div id="pet-err" style="color:var(--coral);font-size:13px;margin-bottom:10px;"></div>
       <button class="btn-primary" style="width:100%;margin-top:4px;" onclick="submitPetSetup()">はじめる</button>
     </div>
