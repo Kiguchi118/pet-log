@@ -99,7 +99,7 @@
   .ios-switch input:checked + .ios-slider{background:var(--coral);}
   .ios-switch input:checked + .ios-slider:before{transform:translateX(19px);}
   .modal-backdrop{position:fixed;inset:0;background:rgba(59,46,39,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;box-sizing:border-box;}
-  .modal-sheet{background:#fff;width:100%;max-width:480px;min-width:0;border-radius:22px;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;}
+  .modal-sheet{background:#fff;width:100%;max-width:480px;min-width:0;border-radius:22px;padding:18px 18px 26px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;overflow-anchor:none;}
   .tabbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;z-index:20;padding-bottom:env(safe-area-inset-bottom);}
   .tabbtn{flex:1;background:none;border:none;padding:9px 0 8px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:var(--inkSoft);}
   .tabbtn.active{color:var(--coral);font-weight:700;}
@@ -2255,11 +2255,23 @@ function captureFocusState(root){
     sheetScrollTop,
   };
 }
+function applySheetScrollTop(value){
+  const sheet = document.querySelector(".modal-sheet");
+  if(sheet) sheet.scrollTop = value;
+}
 function restoreFocusState(info){
   if(!info) return;
   if(info.sheetScrollTop!=null){
-    const sheet = document.querySelector(".modal-sheet");
-    if(sheet) sheet.scrollTop = info.sheetScrollTop;
+    // 同期的に一度セットするだけでは、モバイル端末（特にiOS Safari）で
+    // タップ後のフォーカス処理が後から走り、せっかく戻したスクロール位置を
+    // 上書きしてしまうことがある。そのため rAF / setTimeout でも再適用し、
+    // 確実にスクロール位置を保つ。
+    applySheetScrollTop(info.sheetScrollTop);
+    requestAnimationFrame(() => {
+      applySheetScrollTop(info.sheetScrollTop);
+      requestAnimationFrame(() => applySheetScrollTop(info.sheetScrollTop));
+    });
+    setTimeout(() => applySheetScrollTop(info.sheetScrollTop), 60);
   }
   if(!info.id) return;
   const el = document.getElementById(info.id);
