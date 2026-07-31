@@ -50,7 +50,7 @@
     --amber:#F3D9A6; --amberText:#8A5A16;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--bg);font-family:'IBM Plex Sans JP',sans-serif;color:var(--ink);overflow-x:hidden;width:100%;}
+  html,body{margin:0;padding:0;background:var(--bg);font-family:'IBM Plex Sans JP',sans-serif;color:var(--ink);overflow-x:hidden;width:100%;overflow-anchor:none;}
   #app{max-width:520px;margin:0 auto;min-height:100vh;position:relative;overflow-x:hidden;}
   .display{font-family:'Zen Maru Gothic',sans-serif;}
   .mono{font-family:'IBM Plex Mono',monospace;}
@@ -2242,17 +2242,24 @@ function captureFocusState(root){
   // chip ボタンをタップした場合、アクティブ要素は <button> になるため、以前は
   // ここで早期リターンしてスクロール位置が保存されず、再描画のたびにポップアップが
   // 先頭へ戻ってしまっていた。
+  // 同じ理由で、モーダルを使わないページ（ペット初期設定・設定画面の犬種／性別／
+  // 避妊去勢チップなど）ではページ全体（window）がスクロールするため、そちらの
+  // スクロール位置も合わせて記録しておく。
   const existingSheet = root.querySelector(".modal-sheet");
   const sheetScrollTop = existingSheet ? existingSheet.scrollTop : null;
+  const pageScrollX = window.scrollX;
+  const pageScrollY = window.scrollY;
 
   const active = document.activeElement;
-  if(!active || !active.id || !root.contains(active)) return { sheetScrollTop };
-  if(active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return { sheetScrollTop };
+  if(!active || !active.id || !root.contains(active)) return { sheetScrollTop, pageScrollX, pageScrollY };
+  if(active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return { sheetScrollTop, pageScrollX, pageScrollY };
   return {
     id: active.id,
     selectionStart: (typeof active.selectionStart === "number") ? active.selectionStart : null,
     selectionEnd: (typeof active.selectionEnd === "number") ? active.selectionEnd : null,
     sheetScrollTop,
+    pageScrollX,
+    pageScrollY,
   };
 }
 function applySheetScrollTop(value){
@@ -2272,6 +2279,15 @@ function restoreFocusState(info){
       requestAnimationFrame(() => applySheetScrollTop(info.sheetScrollTop));
     });
     setTimeout(() => applySheetScrollTop(info.sheetScrollTop), 60);
+  }
+  if(info.pageScrollX!=null && info.pageScrollY!=null){
+    const restorePageScroll = () => window.scrollTo(info.pageScrollX, info.pageScrollY);
+    restorePageScroll();
+    requestAnimationFrame(() => {
+      restorePageScroll();
+      requestAnimationFrame(restorePageScroll);
+    });
+    setTimeout(restorePageScroll, 60);
   }
   if(!info.id) return;
   const el = document.getElementById(info.id);
