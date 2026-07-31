@@ -2237,28 +2237,36 @@ const TABS = [
    the focused field's id, cursor position, and the modal's scroll offset
    right before the innerHTML swap, then restore all three right after. */
 function captureFocusState(root){
+  // モーダル内のスクロール位置は、フォーカスが input/textarea かどうかに関係なく
+  // 常に記録する。うんち・おしっこの記録ポップアップ内にある「様子」「量」などの
+  // chip ボタンをタップした場合、アクティブ要素は <button> になるため、以前は
+  // ここで早期リターンしてスクロール位置が保存されず、再描画のたびにポップアップが
+  // 先頭へ戻ってしまっていた。
+  const existingSheet = root.querySelector(".modal-sheet");
+  const sheetScrollTop = existingSheet ? existingSheet.scrollTop : null;
+
   const active = document.activeElement;
-  if(!active || !active.id || !root.contains(active)) return null;
-  if(active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return null;
-  const scrollSheet = active.closest(".modal-sheet");
+  if(!active || !active.id || !root.contains(active)) return { sheetScrollTop };
+  if(active.tagName !== "INPUT" && active.tagName !== "TEXTAREA") return { sheetScrollTop };
   return {
     id: active.id,
     selectionStart: (typeof active.selectionStart === "number") ? active.selectionStart : null,
     selectionEnd: (typeof active.selectionEnd === "number") ? active.selectionEnd : null,
-    sheetScrollTop: scrollSheet ? scrollSheet.scrollTop : null,
+    sheetScrollTop,
   };
 }
 function restoreFocusState(info){
   if(!info) return;
+  if(info.sheetScrollTop!=null){
+    const sheet = document.querySelector(".modal-sheet");
+    if(sheet) sheet.scrollTop = info.sheetScrollTop;
+  }
+  if(!info.id) return;
   const el = document.getElementById(info.id);
   if(!el) return;
   el.focus({preventScroll:true});
   if(info.selectionStart!=null && typeof el.setSelectionRange === "function"){
     try{ el.setSelectionRange(info.selectionStart, info.selectionEnd); }catch(e){}
-  }
-  if(info.sheetScrollTop!=null){
-    const sheet = document.querySelector(".modal-sheet");
-    if(sheet) sheet.scrollTop = info.sheetScrollTop;
   }
 }
 
