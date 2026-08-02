@@ -771,11 +771,11 @@ async function quickLog(catKey, extra){
 }
 
 /* ================= record modal (detail form, create & edit) ================= */
-function openRecordModal(catKey, editRecord, presetDay){
+function openRecordModal(catKey, editRecord, presetDay, defaultStatus){
   state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null };
   state.modalSub = {
     amount: (editRecord && editRecord.amount) || "ふつう",
-    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : "good",
+    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : (defaultStatus === "bad" ? "bad" : "good"),
     condition: (editRecord && editRecord.condition) || "元気",
     urineColor: (editRecord && editRecord.urineColor) || "",
     urineAmount: (editRecord && editRecord.urineAmount) || "",
@@ -1563,8 +1563,8 @@ function renderCategoryRows(list, lastByType){
     let action = "";
     if(c.quick === "binary"){
       action = `
-        <button class="row-btn good" onclick="quickLog('${c.key}',{status:'good'})">✓ 成功</button>
-        <button class="row-btn bad" onclick="quickLog('${c.key}',{status:'bad'})">✕ 失敗</button>`;
+        <button class="row-btn good" onclick="openRecordModal('${c.key}', null, null, 'good')">✓ 成功</button>
+        <button class="row-btn bad" onclick="openRecordModal('${c.key}', null, null, 'bad')">✕ 失敗</button>`;
     } else if(c.quick === "instant"){
       action = `<button class="row-btn" onclick="quickLog('${c.key}',{amount:'ふつう'})">記録</button>`;
     } else {
