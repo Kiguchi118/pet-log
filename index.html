@@ -1085,10 +1085,9 @@ async function saveEventFromModal(){
   const date = document.getElementById("ev-date").value;
   const time = document.getElementById("ev-time").value;
   const memo = document.getElementById("ev-memo").value.trim();
-  const notify = document.getElementById("ev-notify").checked;
   const type = state.modalSub.eventType;
   if(!date){ document.getElementById("ev-err").textContent = "日付を入力してください"; return; }
-  const ev = { type, date, time, memo, notify };
+  const ev = { type, date, time, memo };
   const btn = document.getElementById("ev-submit");
   btn.disabled = true; btn.textContent = "保存中…";
   const prevData = editEvent ? { ...editEvent } : null;
@@ -2154,7 +2153,7 @@ function renderEventModal(){
         <div class="display" style="font-weight:700;font-size:19px;">📅 予定を${ev?'編集':'追加'}</div>
         <button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:18px;">✕</button>
       </div>
-      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:14px;">通院・トリミングなど、これからの予定を登録できます。</div>
+      <div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:14px;">通院・トリミングなど、これからの予定を登録できます。</div>
       <div class="field">
         <div class="field-label">種類</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
@@ -2169,17 +2168,12 @@ function renderEventModal(){
         <label class="field"><div class="field-label">時刻（任意）</div><input id="ev-time" type="time" value="${fv('ev-time', ev?(ev.time||''):'')}"></label>
       </div>
       <label class="field"><div class="field-label">メモ（任意）</div><textarea id="ev-memo" rows="2" placeholder="例：予防接種の相談">${esc(fv('ev-memo', ev?(ev.memo||''):''))}</textarea></label>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:14px;cursor:pointer;">
-        <input id="ev-notify" type="checkbox" style="width:18px;height:18px;" ${fv('ev-notify', ev?(ev.notify?true:false):true) ? 'checked' : ''}>
-        <span style="font-size:13px;">🔔 お知らせを受け取る</span>
-      </label>
-      <div style="font-size:11px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※このお知らせはアプリを開いている時のみ表示される簡易的なものです。オフでもホーム画面の「次回の予定」には表示されます。</div>
-      <button type="button" onclick="addEventToGoogleCalendar()" style="width:100%;margin-bottom:14px;padding:11px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-weight:700;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📅 Googleカレンダーにも追加</button>
       <div id="ev-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;">
         <button id="ev-submit" class="btn-primary" style="flex:1;" onclick="saveEventFromModal()">${ev?'保存する':'保存'}</button>
         ${ev ? `<button class="btn-danger" onclick="deleteEventFromModal()">削除</button>` : ""}
       </div>
+      <button type="button" onclick="addEventToGoogleCalendar()" style="width:100%;margin-top:10px;padding:11px;border-radius:12px;border:none;background:#4285F4;color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 1px 3px rgba(66,133,244,.35);">📅 Googleカレンダーにも追加</button>
     </div>
   </div>`;
 }
