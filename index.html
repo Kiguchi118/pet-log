@@ -1505,12 +1505,12 @@ function relativeDayLabel(dateStr){
   const today = new Date(); today.setHours(0,0,0,0);
   const diffDays = Math.round((target-today)/86400000);
   const days = ["日","月","火","水","木","金","土"];
-  const md = `${target.getMonth()+1}/${target.getDate()}(${days[target.getDay()]})`;
-  if(diffDays === 0) return { text:`今日・${md}`, tone:"soon" };
-  if(diffDays === 1) return { text:`明日・${md}`, tone:"soon" };
-  if(diffDays < 0) return { text:`${md}（${Math.abs(diffDays)}日前）`, tone:"overdue" };
-  if(diffDays <= 7) return { text:`${md}（${diffDays}日後）`, tone:"soon" };
-  return { text: md, tone:"later" };
+  let text, tone;
+  if(diffDays === 0){ text = "今日"; tone = "soon"; }
+  else if(diffDays === 1){ text = "明日"; tone = "soon"; }
+  else if(diffDays < 0){ text = `${Math.abs(diffDays)}日前`; tone = "overdue"; }
+  else { text = `あと${diffDays}日`; tone = diffDays <= 7 ? "soon" : "later"; }
+  return { text, tone, month: target.getMonth()+1, day: target.getDate(), weekday: days[target.getDay()] };
 }
 function renderHome(){
   if(!state.pet) return "";
@@ -1538,19 +1538,29 @@ function renderHome(){
   return `
   ${upcomingSoon.length ? `
   <div class="card" style="padding:14px 16px;margin-bottom:14px;">
-    <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px;">🔔 次回の予定</div>
+    <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">🔔 次回の予定</div>
     ${upcomingSoon.map((u,i)=>{
       const rd = relativeDayLabel(u.date);
       const emoji = (ALL_TYPE_META[u.type]||{}).emoji || (EVENT_TYPE_BY_KEY[u.type]||{}).emoji || "📌";
       const badgeBg = rd.tone==="overdue" ? "var(--coralSoft)" : rd.tone==="soon" ? "var(--mint)" : "var(--chip)";
       const badgeText = rd.tone==="overdue" ? "var(--coralSoftText)" : rd.tone==="soon" ? "var(--mintText)" : "var(--chipText)";
+      const clickable = u.source==='event';
       return `
-      <div ${u.source==='event'?`onclick='openEventModal(${JSON.stringify(u.date)}, ${JSON.stringify(u.id)})'`:''} style="display:flex;align-items:center;gap:10px;padding:9px 0;${i>0?'border-top:1px solid var(--line);':''}${u.source==='event'?'cursor:pointer;':''}">
-        <span style="font-size:17px;flex-shrink:0;">${emoji}</span>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.label)}${u.memo?` ・ ${esc(u.memo)}`:""}</div>
+      <div ${clickable?`onclick='openEventModal(${JSON.stringify(u.date)}, ${JSON.stringify(u.id)})'`:''} style="display:flex;align-items:center;gap:12px;padding:10px 0;${i>0?'border-top:1px solid var(--line);':''}${clickable?'cursor:pointer;':''}">
+        <div style="flex-shrink:0;width:44px;text-align:center;background:var(--bg);border-radius:10px;padding:5px 2px;">
+          <div class="mono" style="font-size:9.5px;color:var(--inkSoft);line-height:1.3;">${rd.month}月</div>
+          <div class="mono" style="font-size:17px;font-weight:700;line-height:1.15;color:var(--ink);">${rd.day}</div>
+          <div style="font-size:9.5px;color:var(--inkSoft);line-height:1.3;">(${rd.weekday})</div>
         </div>
-        <span class="mono" style="font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:${badgeBg};color:${badgeText};white-space:nowrap;flex-shrink:0;">${rd.text}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <span style="font-size:15px;flex-shrink:0;">${emoji}</span>
+            <span style="font-weight:700;font-size:13.5px;">${esc(u.label)}</span>
+            <span class="mono" style="font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:${badgeBg};color:${badgeText};white-space:nowrap;">${rd.text}</span>
+          </div>
+          ${u.memo ? `<div style="font-size:12px;color:var(--inkSoft);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.memo)}</div>` : ""}
+        </div>
+        ${clickable ? `<span style="font-size:15px;color:var(--inkSoft);flex-shrink:0;">›</span>` : ""}
       </div>`;
     }).join("")}
   </div>` : ""}
