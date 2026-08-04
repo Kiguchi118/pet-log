@@ -1145,6 +1145,51 @@ async function deleteEventFromModal(){
     alert("削除できませんでした。通信状況を確認してください。");
   }
 }
+/* 予定モーダルの現在の入力内容から、Googleカレンダーの「予定作成」画面をURLで開く。
+   OAuth等は不要（GoogleカレンダーのURLテンプレート機能を利用）。 */
+function addEventToGoogleCalendar(){
+  captureModalFormValues();
+  const date = fv('ev-date', document.getElementById("ev-date") ? document.getElementById("ev-date").value : "");
+  const time = fv('ev-time', document.getElementById("ev-time") ? document.getElementById("ev-time").value : "");
+  const memo = fv('ev-memo', document.getElementById("ev-memo") ? document.getElementById("ev-memo").value : "");
+  if(!date){
+    document.getElementById("ev-err").textContent = "日付を入力してください";
+    return;
+  }
+  const typeMeta = EVENT_TYPE_BY_KEY[state.modalSub.eventType] || { label: "予定" };
+  const petName = (state.pet && state.pet.name) ? state.pet.name : "";
+  const title = [petName, typeMeta.label].filter(Boolean).join(" ・ ");
+  const datePart = date.replace(/-/g, "");
+  let datesParam;
+  if(time){
+    const [h, m] = time.split(":").map(Number);
+    let endH = h + 1;
+    let endDatePart = datePart;
+    if(endH >= 24){
+      endH -= 24;
+      const nextDay = new Date(date + "T00:00:00");
+      nextDay.setDate(nextDay.getDate() + 1);
+      endDatePart = localDayStr(nextDay).replace(/-/g, "");
+    }
+    const pad = (n) => String(n).padStart(2, "0");
+    const startTimePart = `${pad(h)}${pad(m)}00`;
+    const endTimePart = `${pad(endH)}${pad(m)}00`;
+    datesParam = `${datePart}T${startTimePart}/${endDatePart}T${endTimePart}`;
+  } else {
+    const nextDay = new Date(date + "T00:00:00");
+    nextDay.setDate(nextDay.getDate() + 1);
+    const endPart = localDayStr(nextDay).replace(/-/g, "");
+    datesParam = `${datePart}/${endPart}`;
+  }
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: datesParam,
+    details: memo || "",
+    ctz: "Asia/Tokyo"
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, "_blank");
+}
 
 /* ================= settings actions ================= */
 async function saveMyNameSetting(){
@@ -1501,7 +1546,7 @@ function renderHome(){
       const badgeBg = rd.tone==="overdue" ? "var(--coralSoft)" : rd.tone==="soon" ? "var(--mint)" : "var(--chip)";
       const badgeText = rd.tone==="overdue" ? "var(--coralSoftText)" : rd.tone==="soon" ? "var(--mintText)" : "var(--chipText)";
       return `
-      <div onclick="${u.source==='event'?`openEventModal(${JSON.stringify(u.date)},${JSON.stringify(u.id)})`:''}" style="display:flex;align-items:center;gap:10px;padding:9px 0;${i>0?'border-top:1px solid var(--line);':''}${u.source==='event'?'cursor:pointer;':''}">
+      <div ${u.source==='event'?`onclick='openEventModal(${JSON.stringify(u.date)}, ${JSON.stringify(u.id)})'`:''} style="display:flex;align-items:center;gap:10px;padding:9px 0;${i>0?'border-top:1px solid var(--line);':''}${u.source==='event'?'cursor:pointer;':''}">
         <span style="font-size:17px;flex-shrink:0;">${emoji}</span>
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(u.label)}${u.memo?` ・ ${esc(u.memo)}`:""}</div>
@@ -2129,6 +2174,7 @@ function renderEventModal(){
         <span style="font-size:13px;">🔔 お知らせを受け取る</span>
       </label>
       <div style="font-size:11px;color:var(--inkSoft);margin-bottom:10px;line-height:1.6;">※このお知らせはアプリを開いている時のみ表示される簡易的なものです。オフでもホーム画面の「次回の予定」には表示されます。</div>
+      <button type="button" onclick="addEventToGoogleCalendar()" style="width:100%;margin-bottom:14px;padding:11px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--ink);font-weight:700;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">📅 Googleカレンダーにも追加</button>
       <div id="ev-err" style="color:var(--coral);font-size:12.5px;margin-bottom:10px;"></div>
       <div style="display:flex;gap:8px;">
         <button id="ev-submit" class="btn-primary" style="flex:1;" onclick="saveEventFromModal()">${ev?'保存する':'保存'}</button>
