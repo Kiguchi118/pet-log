@@ -643,6 +643,24 @@ const WMO_CODE_META = {
   95:{label:"雷雨",emoji:"⛈️"}, 96:{label:"雷雨（ひょう）",emoji:"⛈️"}, 99:{label:"雷雨（ひょう）",emoji:"⛈️"},
 };
 function weatherCodeMeta(code){ return WMO_CODE_META[code] || { label:"—", emoji:"🌡️" }; }
+/* 天気コードを「晴れ・くもり・霧・雨・雪・雷雨」の大分類に振り分け、それぞれに分かりやすい背景色をあてる */
+function weatherCategory(code){
+  if(code===0 || code===1) return "sunny";
+  if(code===2 || code===3) return "cloudy";
+  if(code===45 || code===48) return "fog";
+  if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return "rain";
+  if([71,73,75,77,85,86].includes(code)) return "snow";
+  if([95,96,99].includes(code)) return "thunder";
+  return "sunny";
+}
+const WEATHER_CAT_STYLE = {
+  sunny:   { bg:"#FDECC3", text:"#8A5A16" },
+  cloudy:  { bg:"#E3E7EC", text:"#4C5560" },
+  fog:     { bg:"#DCE6E8", text:"#4B6B70" },
+  rain:    { bg:"#D2E6F8", text:"#2B6CA3" },
+  snow:    { bg:"#E9F1FA", text:"#3D7A9E" },
+  thunder: { bg:"#E2D9F4", text:"#5B3E96" },
+};
 
 async function loadWeatherData(force){
   const pet = state.pet;
@@ -738,7 +756,12 @@ function dayNightIcon(isDay, size){
 function hourlyForDay(w, dayIdx){
   const dayStr = w.daily.time[dayIdx];
   const idxs = [];
-  w.hourly.time.forEach((t,i)=>{ if(t.slice(0,10) === dayStr) idxs.push(i); });
+  w.hourly.time.forEach((t,i)=>{
+    if(t.slice(0,10) !== dayStr) return;
+    const hour = new Date(t).getHours();
+    if(hour < 5 || hour > 22) return; // 朝5時〜22時のみ表示
+    idxs.push(i);
+  });
   return idxs.map(i=>({
     hour: new Date(w.hourly.time[i]).getHours(),
     temp: w.hourly.temperature_2m[i],
@@ -868,30 +891,31 @@ function renderHourRow(h, isFirst, isNow){
   const meta = weatherCodeMeta(h.code);
   const jmeta = JUDGE_META[h.judge];
   const label = periodLabel(h.hour);
-  const bg = isNow ? "background:rgba(193,68,58,.07);border-left:3px solid var(--coral);border-radius:8px;margin:2px 0;padding-left:9px;padding-right:8px;" : "padding-left:4px;padding-right:4px;";
+  const catStyle = WEATHER_CAT_STYLE[weatherCategory(h.code)];
+  const rowBg = isNow ? "rgba(193,68,58,.12)" : catStyle.bg;
+  const borderLeft = isNow ? "3px solid var(--coral)" : "3px solid transparent";
   return `
-  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:10px;padding-top:11px;padding-bottom:11px;${bg}${(isFirst||isNow)?'':'border-top:1px solid var(--line);'}">
-    <div style="width:60px;flex-shrink:0;font-size:14px;font-weight:700;${isNow?'color:var(--coral);':''}">${h.hour}時${label?` <span style="font-size:11px;font-weight:600;color:${isNow?'var(--coral)':'var(--inkSoft)'};">${label}</span>`:''}</div>
-    <div style="font-size:18px;width:24px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
-    <div class="mono" style="width:42px;flex-shrink:0;font-size:15px;font-weight:600;${isNow?'color:var(--coral);':''}">${Math.round(h.temp)}°</div>
+  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:7px;padding:5px 7px;margin:2px 0;border-radius:8px;background:${rowBg};border-left:${borderLeft};">
+    <div style="width:52px;flex-shrink:0;font-size:12px;font-weight:700;white-space:nowrap;${isNow?'color:var(--coral);':''}">${h.hour}時${label?` <span style="font-size:9.5px;font-weight:600;color:${isNow?'var(--coral)':'var(--inkSoft)'};">${label}</span>`:''}</div>
+    <div style="font-size:15px;width:20px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
+    <div class="mono" style="width:32px;flex-shrink:0;font-size:12.5px;font-weight:600;${isNow?'color:var(--coral);':''}">${Math.round(h.temp)}°</div>
     <div style="flex:1;"></div>
-    <span class="walk-pill ${jmeta.cls}">${jmeta.label}</span>
+    <span class="walk-pill ${jmeta.cls}" style="font-size:10px;padding:3px 8px;">${jmeta.label}</span>
   </div>`;
 }
 function renderDayStrip(w){
   const days = ["日","月","火","水","木","金","土"];
-  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99];
-  return `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px;">
+  return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;">
     ${w.daily.time.map((d,i)=>{
       const dt = new Date(d+"T00:00:00");
       const label = i===0 ? "今日" : `${dt.getMonth()+1}/${dt.getDate()}${days[dt.getDay()]}`;
       const meta = weatherCodeMeta(w.daily.weather_code[i]);
       const active = state.weatherSelectedDayIdx === i;
-      const isRain = rainCodes.includes(w.daily.weather_code[i]);
-      return `<button onclick="selectWeatherDay(${i})" style="flex:0 0 auto;min-width:72px;text-align:center;padding:10px 6px;border-radius:14px;border:${active?'2px solid #2B3242':'1px solid var(--line)'};background:${isRain?'#2E5F66':'#F2F2F0'};color:${isRain?'#fff':'var(--ink)'};cursor:pointer;">
-        <div style="font-size:11.5px;font-weight:700;">${label}</div>
-        <div style="font-size:17px;margin:4px 0;">${meta.emoji}</div>
-        <div class="mono" style="font-size:11.5px;font-weight:700;">${Math.round(w.daily.temperature_2m_max[i])}/${Math.round(w.daily.temperature_2m_min[i])}</div>
+      const catStyle = WEATHER_CAT_STYLE[weatherCategory(w.daily.weather_code[i])];
+      return `<button onclick="selectWeatherDay(${i})" style="flex:0 0 auto;min-width:60px;text-align:center;padding:8px 5px;border-radius:12px;border:${active?'2px solid #2B3242':'1px solid rgba(0,0,0,.06)'};background:${catStyle.bg};color:${catStyle.text};cursor:pointer;">
+        <div style="font-size:10.5px;font-weight:700;">${label}</div>
+        <div style="font-size:15px;margin:3px 0;">${meta.emoji}</div>
+        <div class="mono" style="font-size:10.5px;font-weight:700;">${Math.round(w.daily.temperature_2m_max[i])}/${Math.round(w.daily.temperature_2m_min[i])}</div>
       </button>`;
     }).join("")}
   </div>`;
@@ -901,26 +925,26 @@ function renderTodayDetails(w){
   if(!s) return "";
   const wb = wbgtMeta(s.wbgt);
   const chip = (icon, val, label) => `
-    <div style="flex:1 1 0;min-width:74px;background:var(--bg);border-radius:12px;padding:9px 6px;text-align:center;">
-      <div style="font-size:11px;color:var(--inkSoft);">${icon} ${label}</div>
-      <div class="mono" style="font-weight:700;font-size:14.5px;margin-top:2px;">${val}</div>
+    <div style="flex:1 1 0;min-width:60px;background:var(--bg);border-radius:9px;padding:5px 4px;text-align:center;">
+      <div style="font-size:9.5px;color:var(--inkSoft);white-space:nowrap;">${icon} ${label}</div>
+      <div class="mono" style="font-weight:700;font-size:12.5px;margin-top:1px;">${val}</div>
     </div>`;
   const updated = state.weather && state.weather.fetchedAt ? new Date(state.weather.fetchedAt).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}) : "";
   return `
-  <div style="font-weight:700;font-size:14px;margin:4px 0 10px;">今日の詳しいところ</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+  <div style="font-weight:700;font-size:12.5px;margin:8px 0 6px;">今日の詳しいところ</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
     ${chip("🌡️", Math.round(s.apparent)+"℃", "体感")}
     ${chip("💧", Math.round(s.humidity)+"%", "湿度")}
     ${chip("🐾", Math.round(s.ground)+"℃", "地面")}
     ${chip("☀️", Math.round(s.uv), "UV指数")}
   </div>
-  <div style="display:flex;align-items:center;gap:9px;background:${wb.bg};color:${wb.text};border-radius:12px;padding:11px 14px;margin-bottom:16px;font-weight:700;font-size:13.5px;">
+  <div style="display:flex;align-items:center;gap:6px;background:${wb.bg};color:${wb.text};border-radius:9px;padding:6px 10px;margin-bottom:8px;font-weight:700;font-size:11.5px;">
     <span>⚠️</span><span>暑さ指数 ${Math.round(s.wbgt)} ${wb.label}</span>
   </div>
-  <div style="font-size:11.5px;color:var(--inkSoft);line-height:1.8;">
-    各地域の気象データをもとにした簡易的な目安です。暑さ指数は概算値です。ワンちゃん・ネコちゃんの体調に異変を感じたら、すぐに動物病院へご相談ください。<br>
-    ${updated ? `${updated} 時点の予報です（このアプリでは約15分ごとに更新されます）<br>` : ""}
-    Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:var(--inkSoft);">Open-Meteo.com</a>（CC BY 4.0）
+  <div style="font-size:9.5px;color:var(--inkSoft);line-height:1.45;">
+    各地域の気象データをもとにした簡易的な目安です。暑さ指数は概算値です。ワンちゃん・ネコちゃんの体調に異変を感じたら、すぐに動物病院へご相談ください。
+    ${updated ? `${updated} 時点の予報です（約15分ごとに更新）` : ""}
+    ／ Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:var(--inkSoft);">Open-Meteo.com</a>（CC BY 4.0）
   </div>`;
 }
 function renderWeatherModal(){
