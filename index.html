@@ -874,7 +874,6 @@ function renderHourRow(h, isFirst, isNow){
     <div style="width:60px;flex-shrink:0;font-size:14px;font-weight:700;${isNow?'color:var(--coral);':''}">${h.hour}時${label?` <span style="font-size:11px;font-weight:600;color:${isNow?'var(--coral)':'var(--inkSoft)'};">${label}</span>`:''}</div>
     <div style="font-size:18px;width:24px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
     <div class="mono" style="width:42px;flex-shrink:0;font-size:15px;font-weight:600;${isNow?'color:var(--coral);':''}">${Math.round(h.temp)}°</div>
-    ${isNow ? `<span class="mono" style="font-size:10px;font-weight:700;color:#fff;background:var(--coral);padding:2px 7px;border-radius:999px;">いま</span>` : ""}
     <div style="flex:1;"></div>
     <span class="walk-pill ${jmeta.cls}">${jmeta.label}</span>
   </div>`;
