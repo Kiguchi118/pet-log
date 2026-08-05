@@ -650,15 +650,17 @@ function pavementExcess(temp, code, isDay){
   if(cat === "cloudy") return scaledExcess(temp, 12, 25, 4, 13);  // 曇り・薄曇りは上昇幅を控えめに
   return 3;                                                       // 雨・雪など：路面が濡れて冷えやすく上昇はわずか
 }
-function estimatePavementTemp(airTemp, code, isDay, soilTemp){
-  if(airTemp == null) return (soilTemp!=null) ? soilTemp : null;
-  const estimated = airTemp + pavementExcess(airTemp, code, isDay);
-  return (soilTemp!=null) ? Math.max(soilTemp, estimated) : estimated;
+/* Open-Meteoの地表(0cm)温度データは、直射日光下の裸地モデルのため気温が高くなくても
+   跳ね上がることがあり、説明しにくく予測しづらい数値になる。そのため使わず、
+   気温・天気・昼夜から算出する推定式だけを採用する（実測データに基づくため一貫性がある） */
+function estimatePavementTemp(airTemp, code, isDay){
+  if(airTemp == null) return null;
+  return airTemp + pavementExcess(airTemp, code, isDay);
 }
-/* h = { temp, apparent, code, isDay, soilTemp } を受け取り、おすすめ／ようすを見て／さけて を返す */
+/* h = { temp, apparent, code, isDay } を受け取り、おすすめ／ようすを見て／さけて を返す */
 function judgeWalk(h){
   if(!h) return "warn";
-  const { temp, apparent, code, isDay, soilTemp } = h;
+  const { temp, apparent, code, isDay } = h;
   if(temp == null || isNaN(temp)) return "warn";
   const heatFeels = (apparent!=null && !isNaN(apparent)) ? apparent : temp;
 
@@ -667,7 +669,7 @@ function judgeWalk(h){
   // 寒さ側は実際の気温で判定（風による体感低下だけで過剰に「さけて」にならないようにする）
   if(temp < WALK_APPARENT_THRESHOLDS.warnLowMin) return "bad";
 
-  const pavement = estimatePavementTemp(temp, code, isDay, soilTemp);
+  const pavement = estimatePavementTemp(temp, code, isDay);
   if(pavement != null && pavement >= PAVEMENT_DANGER_C) return "bad";
   if(heatFeels >= WALK_APPARENT_THRESHOLDS.dangerHighMin) return "bad";
 
@@ -721,7 +723,7 @@ async function loadWeatherData(force){
     const params = [
       `latitude=${lat}`, `longitude=${lon}`,
       `current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day`,
-      `hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,soil_temperature_0cm,is_day`,
+      `hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,is_day`,
       `daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset`,
       `timezone=auto`, `forecast_days=8`
     ].join("&");
@@ -820,7 +822,6 @@ function hourlyForDay(w, dayIdx){
       apparent: w.hourly.apparent_temperature ? w.hourly.apparent_temperature[i] : null,
       code: w.hourly.weather_code[i],
       isDay: w.hourly.is_day ? w.hourly.is_day[i] : 1,
-      soilTemp: w.hourly.soil_temperature_0cm ? w.hourly.soil_temperature_0cm[i] : null,
     }),
   }));
 }
@@ -867,8 +868,7 @@ function todayPeakStats(w){
   idxs.forEach(i=>{ if(w.hourly.apparent_temperature[i] > w.hourly.apparent_temperature[peakIdx]) peakIdx = i; });
   const humidity = w.hourly.relative_humidity_2m[peakIdx];
   const ground = idxs.reduce((m,i)=>{
-    const soil = (w.hourly.soil_temperature_0cm && w.hourly.soil_temperature_0cm[i]!=null) ? w.hourly.soil_temperature_0cm[i] : null;
-    const v = estimatePavementTemp(w.hourly.temperature_2m[i], w.hourly.weather_code[i], w.hourly.is_day ? w.hourly.is_day[i] : 1, soil);
+    const v = estimatePavementTemp(w.hourly.temperature_2m[i], w.hourly.weather_code[i], w.hourly.is_day ? w.hourly.is_day[i] : 1);
     return Math.max(m, v);
   }, -Infinity);
   const uv = idxs.reduce((m,i)=> Math.max(m, (w.hourly.uv_index && w.hourly.uv_index[i]) || 0), 0);
@@ -926,7 +926,6 @@ function renderWeatherBar(){
     apparent: cur.apparent_temperature,
     code: cur.weather_code,
     isDay: cur.is_day,
-    soilTemp: null,
   });
   const jmeta = JUDGE_META[judge];
   const wmeta = weatherCodeMeta(cur.weather_code);
