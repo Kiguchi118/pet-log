@@ -662,7 +662,11 @@ function judgeWalk(h){
   if(!h) return "warn";
   const { temp, apparent, code, isDay } = h;
   if(temp == null || isNaN(temp)) return "warn";
-  const heatFeels = (apparent!=null && !isNaN(apparent)) ? apparent : temp;
+  // 体感温度（apparent_temperature）は、湿度がほぼ100%に近いと気温+5℃以上まで跳ね上がることがある
+  // （霧雨など）。湿度による放熱しにくさは確かに考慮したい要素だが、気温そのものが高くない
+  // うちから「さけて」になってしまうのは過剰なため、湿度による上乗せ分は+3℃までに制限する
+  const humidityBoost = (apparent!=null && !isNaN(apparent)) ? Math.max(0, Math.min(apparent - temp, 3)) : 0;
+  const heatFeels = temp + humidityBoost;
 
   if(HEAVY_WEATHER_CODES.includes(code)) return "bad";
 
