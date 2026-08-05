@@ -884,6 +884,17 @@ function renderWeatherBar(){
   </div>`;
 }
 
+/* 時間ごとの天気に応じて、赤(晴れ)・濃い青(雨)・グレー(曇り)・水色(雪)がなめらかに変化するグラデーションバーを作る */
+function buildHourBarGradient(hours){
+  if(!hours.length) return "var(--coral)";
+  const n = hours.length;
+  const stops = hours.map((h,i)=>{
+    const color = WEATHER_CAT_STYLE[weatherCategory(h.code)].bg;
+    const pct = ((i+0.5)/n*100).toFixed(2);
+    return `${color} ${pct}%`;
+  });
+  return `linear-gradient(to bottom, ${stops.join(", ")})`;
+}
 function renderHourRow(h, isFirst, isNow){
   const meta = weatherCodeMeta(h.code);
   const jmeta = JUDGE_META[h.judge];
@@ -900,7 +911,7 @@ function renderHourRow(h, isFirst, isNow){
 }
 function renderDayStrip(w){
   const days = ["日","月","火","水","木","金","土"];
-  return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px;">
+  return `<div style="display:flex;gap:6px;overflow-x:auto;padding:6px 6px 8px;margin:-6px -6px 8px;">
     ${w.daily.time.map((d,i)=>{
       const dt = new Date(d+"T00:00:00");
       const label = i===0 ? "今日" : `${dt.getMonth()+1}/${dt.getDate()}${days[dt.getDay()]}`;
@@ -989,7 +1000,8 @@ function renderWeatherModal(){
       ${rangesText
         ? `<div style="color:var(--coral);font-weight:700;font-size:13px;margin-top:8px;">おすすめは ${rangesText}</div>`
         : `<div style="color:var(--inkSoft);font-size:12.5px;margin-top:8px;">この日はお散歩に適した時間帯が見つかりませんでした。暑さ・寒さに気をつけてください。</div>`}
-      <div style="margin-top:14px;border-left:3px solid var(--coral);padding-left:10px;">
+      <div style="margin-top:14px;position:relative;padding-left:13px;">
+        <div style="position:absolute;left:0;top:2px;bottom:2px;width:4px;border-radius:3px;background:${buildHourBarGradient(hours)};"></div>
         ${hours.map((h,i)=>renderHourRow(h, i===0, h.hour===nowHour)).join("")}
       </div>
       <div style="font-weight:700;font-size:14px;margin:22px 0 10px;">これから1週間</div>
