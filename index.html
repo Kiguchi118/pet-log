@@ -611,18 +611,59 @@ async function loadMoreDiary(){
 }
 
 /* ================= おさんぽ天気（Open-Meteo） ================= */
-/* 気温だけを使ったシンプルな3段階判定（後で調整可能な設定値） */
-const WALK_TEMP_THRESHOLDS = {
-  goodMin: 7,       // 🟢 おすすめ：goodMin ≦ 気温 ＜ warnHighMin
-  warnHighMin: 24,  // 🟡 ようすを見て（暑い側）：warnHighMin ≦ 気温 ＜ dangerHighMin
-  dangerHighMin: 29,// 🔴 さけて（暑い側）：気温 ≧ dangerHighMin
-  warnLowMin: 0,    // 🟡 ようすを見て（寒い側）：warnLowMin ≦ 気温 ＜ goodMin
-  // 🔴 さけて（寒い側）：気温 ＜ warnLowMin
+/* ---- お散歩判定：気温だけでなく複数の要素を組み合わせて判定 ----
+   参考にした知見（獣医・動物保護団体等の公開情報より）：
+   ・体感温度（湿度や風を含む apparent_temperature）を使う。湿度が高いと犬はパンティングで
+     熱を逃がしにくくなるため、気温だけでなく体感温度で見たほうが実態に近い
+     （米国の獣医師が示す目安「気温[℉]＋湿度[%]が150以上なら運動を避ける」も、要は
+     気温と湿度をあわせた体感の指標を見よ、という考え方）
+   ・推定路面温度。晴天で直射日光が当たると、アスファルトは気温より25〜30℃前後も高くなり、
+     気温29℃前後でも路面は55℃前後に達し得る（複数の獣医・ペット関連団体の実測データより）。
+     50℃を超えるあたりから60秒未満で肉球が低温やけどを負う恐れがあるとされるため、
+     気温がさほど高くなくても「晴れ・日中」であれば危険側に倒す
+   ・天気そのもの。雷雨や強い雨・雪は、気温に関わらず外出を避けたい天気として扱う
+*/
+const WALK_APPARENT_THRESHOLDS = {
+  goodMin: 7,       // 🟢 おすすめ：goodMin ≦ 体感 ＜ warnHighMin
+  warnHighMin: 24,  // 🟡 ようすを見て（暑い側）：warnHighMin ≦ 体感 ＜ dangerHighMin
+  dangerHighMin: 29,// 🔴 さけて（暑い側）：体感 ≧ dangerHighMin
+  warnLowMin: 0,    // 🟡 ようすを見て（寒い側）：warnLowMin ≦ 体感 ＜ goodMin
+  // 🔴 さけて（寒い側）：体感 ＜ warnLowMin
 };
-function judgeWalk(temp){
-  if(temp == null || isNaN(temp)) return "warn";
-  if(temp >= WALK_TEMP_THRESHOLDS.dangerHighMin || temp < WALK_TEMP_THRESHOLDS.warnLowMin) return "bad";
-  if(temp >= WALK_TEMP_THRESHOLDS.warnHighMin || temp < WALK_TEMP_THRESHOLDS.goodMin) return "warn";
+const PAVEMENT_DANGER_C = 52; // ℃。60秒未満で肉球がやけどするリスクが高まるとされる目安
+const PAVEMENT_WARN_C = 45;   // ℃。素手で7秒触れ続けられないくらい熱く、要注意になる目安
+const HEAVY_WEATHER_CODES = [65,75,82,86,95,96,99]; // 強い雨・強い雪・雷雨など、気温に関わらず避けたい天気
+const MODERATE_WEATHER_CODES = [51,53,55,56,57,61,63,66,67,71,73,77,80,81,85]; // 弱い雨・雪など、ようすを見たい天気
+
+/* 気温・天気・昼夜から、路面（アスファルト等）のおおよその温度を推定する */
+function estimatePavementExcess(code, isDay){
+  if(!isDay) return 3; // 夜間は日射による蓄熱がほぼ抜けるため、上乗せはわずか
+  const cat = weatherCategory(code);
+  if(cat === "sunny") return 28;  // 直射日光がある晴れ：気温+約28℃（実測データの目安）
+  if(cat === "cloudy") return 14; // 曇り・薄曇り：日射が弱く上昇幅も控えめ
+  return 5;                       // 雨・雪など：路面が濡れて冷えやすく上昇はわずか
+}
+function estimatePavementTemp(airTemp, code, isDay, soilTemp){
+  if(airTemp == null) return (soilTemp!=null) ? soilTemp : null;
+  const estimated = airTemp + estimatePavementExcess(code, isDay);
+  return (soilTemp!=null) ? Math.max(soilTemp, estimated) : estimated;
+}
+/* h = { temp, apparent, code, isDay, soilTemp } を受け取り、おすすめ／ようすを見て／さけて を返す */
+function judgeWalk(h){
+  if(!h) return "warn";
+  const { temp, apparent, code, isDay, soilTemp } = h;
+  const feels = (apparent!=null && !isNaN(apparent)) ? apparent : temp;
+  if(feels == null || isNaN(feels)) return "warn";
+
+  if(HEAVY_WEATHER_CODES.includes(code)) return "bad";
+
+  const pavement = estimatePavementTemp(temp, code, isDay, soilTemp);
+  if(pavement != null && pavement >= PAVEMENT_DANGER_C) return "bad";
+  if(feels >= WALK_APPARENT_THRESHOLDS.dangerHighMin || feels < WALK_APPARENT_THRESHOLDS.warnLowMin) return "bad";
+
+  if(MODERATE_WEATHER_CODES.includes(code)) return "warn";
+  if(pavement != null && pavement >= PAVEMENT_WARN_C) return "warn";
+  if(feels >= WALK_APPARENT_THRESHOLDS.warnHighMin || feels < WALK_APPARENT_THRESHOLDS.goodMin) return "warn";
   return "good";
 }
 const JUDGE_META = {
@@ -669,7 +710,7 @@ async function loadWeatherData(force){
     const params = [
       `latitude=${lat}`, `longitude=${lon}`,
       `current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day`,
-      `hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,soil_temperature_0cm`,
+      `hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,soil_temperature_0cm,is_day`,
       `daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset`,
       `timezone=auto`, `forecast_days=8`
     ].join("&");
@@ -763,7 +804,13 @@ function hourlyForDay(w, dayIdx){
     hour: new Date(w.hourly.time[i]).getHours(),
     temp: w.hourly.temperature_2m[i],
     code: w.hourly.weather_code[i],
-    judge: judgeWalk(w.hourly.temperature_2m[i]),
+    judge: judgeWalk({
+      temp: w.hourly.temperature_2m[i],
+      apparent: w.hourly.apparent_temperature ? w.hourly.apparent_temperature[i] : null,
+      code: w.hourly.weather_code[i],
+      isDay: w.hourly.is_day ? w.hourly.is_day[i] : 1,
+      soilTemp: w.hourly.soil_temperature_0cm ? w.hourly.soil_temperature_0cm[i] : null,
+    }),
   }));
 }
 function goodRangesForDay(w, dayIdx){
@@ -809,7 +856,8 @@ function todayPeakStats(w){
   idxs.forEach(i=>{ if(w.hourly.apparent_temperature[i] > w.hourly.apparent_temperature[peakIdx]) peakIdx = i; });
   const humidity = w.hourly.relative_humidity_2m[peakIdx];
   const ground = idxs.reduce((m,i)=>{
-    const v = (w.hourly.soil_temperature_0cm && w.hourly.soil_temperature_0cm[i]!=null) ? w.hourly.soil_temperature_0cm[i] : w.hourly.temperature_2m[i]+8;
+    const soil = (w.hourly.soil_temperature_0cm && w.hourly.soil_temperature_0cm[i]!=null) ? w.hourly.soil_temperature_0cm[i] : null;
+    const v = estimatePavementTemp(w.hourly.temperature_2m[i], w.hourly.weather_code[i], w.hourly.is_day ? w.hourly.is_day[i] : 1, soil);
     return Math.max(m, v);
   }, -Infinity);
   const uv = idxs.reduce((m,i)=> Math.max(m, (w.hourly.uv_index && w.hourly.uv_index[i]) || 0), 0);
@@ -862,7 +910,13 @@ function renderWeatherBar(){
     </div>`;
   }
   const cur = w.current;
-  const judge = judgeWalk(cur.temperature_2m);
+  const judge = judgeWalk({
+    temp: cur.temperature_2m,
+    apparent: cur.apparent_temperature,
+    code: cur.weather_code,
+    isDay: cur.is_day,
+    soilTemp: null,
+  });
   const jmeta = JUDGE_META[judge];
   const wmeta = weatherCodeMeta(cur.weather_code);
   const ranges = goodRangesForDay(w, 0);
@@ -969,7 +1023,9 @@ function renderWeatherModal(){
   const cur = w.current;
   const dayIdx = state.weatherSelectedDayIdx || 0;
   const isToday = dayIdx === 0;
-  const wmeta = weatherCodeMeta(isToday ? cur.weather_code : w.daily.weather_code[dayIdx]);
+  // 「これから1週間」のマークと必ず一致するよう、今日もその日の代表天気（daily.weather_code）を使う
+  const dayCode = w.daily.weather_code[dayIdx];
+  const wmeta = weatherCodeMeta(dayCode);
   const hours = hourlyForDay(w, dayIdx);
   const rangesText = goodRangesForDay(w, dayIdx);
   const dt = new Date(w.daily.time[dayIdx]+"T00:00:00");
@@ -977,6 +1033,10 @@ function renderWeatherModal(){
   const headingLabel = isToday ? "今日" : `${dt.getMonth()+1}/${dt.getDate()}（${days[dt.getDay()]}）`;
   // 「いま」の時間帯（この地域の現在時刻を示す current.time を使う）をハイライトする
   const nowHour = (cur.time && cur.time.slice(0,10) === w.daily.time[dayIdx]) ? new Date(cur.time).getHours() : null;
+  // 晴天（週間ストリップの☀️/🌤️にあたる時）だけは、今日に限り実際の昼夜を反映した太陽・月アイコンにする。それ以外の天気は週間ストリップと同じ絵文字にする。
+  const headerIcon = (isToday && weatherCategory(dayCode) === "sunny")
+    ? dayNightIcon(cur.is_day)
+    : `<div style="font-size:26px;">${wmeta.emoji}</div>`;
 
   return wrap(`
     <div style="position:relative;background:#3F4759;color:#fff;padding:18px 18px 16px;">
@@ -989,7 +1049,7 @@ function renderWeatherModal(){
           <span class="weather-temp-low" style="margin-left:8px;">${Math.round(w.daily.temperature_2m_min[dayIdx])}°</span>
           <span style="margin-left:10px;font-size:13px;">${wmeta.label}${isToday ? ` ・降水 ${Math.round(w.daily.precipitation_probability_max[0])}%` : ""}</span>
         </div>
-        ${isToday ? dayNightIcon(cur.is_day) : `<div style="font-size:26px;">${wmeta.emoji}</div>`}
+        ${headerIcon}
       </div>
     </div>
     <div style="padding:18px 18px 22px;max-height:72vh;overflow-y:auto;">
