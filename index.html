@@ -63,7 +63,7 @@
   .btn-secondary{background:#fff;border:1px solid var(--line);color:var(--ink);font-weight:600;border-radius:999px;padding:11px 18px;cursor:pointer;}
   .field{margin-bottom:12px;display:block;min-width:0;}
   .field-label{font-size:12.5px;color:var(--inkSoft);margin-bottom:4px;}
-  .field input, .field textarea{
+  .field input, .field textarea, .field select{
     width:100%;max-width:100%;box-sizing:border-box;min-width:0;
     background:var(--bg);border:1px solid var(--line);border-radius:10px;
     padding:9px 10px;font-size:14.5px;color:var(--ink);
@@ -118,6 +118,21 @@
   .subtab-wrap{display:flex;gap:4px;margin-bottom:16px;background:var(--cardSoft);padding:4px;border-radius:999px;}
   .subtab-btn{flex:1;padding:8px 0;border-radius:999px;border:none;cursor:pointer;font-size:13px;background:transparent;color:var(--inkSoft);}
   .subtab-btn.active{background:#fff;font-weight:700;color:var(--ink);}
+
+  .weather-bar{background:#3F4759;border-radius:18px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;cursor:pointer;margin-bottom:14px;box-shadow:0 1px 2px rgba(59,46,39,.08);}
+  .weather-bar-left{display:flex;flex-direction:column;gap:7px;min-width:0;}
+  .weather-cond-row{display:flex;align-items:center;gap:8px;}
+  .weather-pop-pill{font-size:10.5px;font-weight:700;background:rgba(255,255,255,.16);padding:3px 9px;border-radius:999px;white-space:nowrap;}
+  .weather-temp-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+  .weather-temp-high{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600;}
+  .weather-temp-low{font-family:'IBM Plex Mono',monospace;font-size:14px;color:rgba(255,255,255,.55);}
+  .weather-times{font-size:11.5px;color:rgba(255,255,255,.78);}
+  .walk-pill{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;white-space:nowrap;}
+  .walk-pill.good{background:var(--mint);color:var(--mintText);}
+  .walk-pill.warn{background:var(--amber);color:var(--amberText);}
+  .walk-pill.bad{background:var(--coralSoft);color:var(--coralSoftText);}
+  .day-night-icon{border-radius:50%;background:#F6E7C1;border:1px solid rgba(255,255,255,.15);}
+  .field select:disabled{opacity:.5;}
 </style>
 </head>
 <body>
@@ -473,6 +488,9 @@ const state = {
   weightPoints: null,
   modal: null, modalSub: {}, modalPhoto: null,
   toast: null,
+
+  weather: null, weatherLoading: false, weatherError: null, weatherSelectedDayIdx: 0,
+  weatherFormPref: "", weatherFormCity: "",
 };
 
 /* ================= data loading ================= */
@@ -484,6 +502,7 @@ async function loadPet(){
 }
 async function loadHome(){
   state.homeLoading = true; render();
+  loadWeatherData();
   try{
     const snap = await recordsRef().orderBy("datetime","desc").limit(300).get();
     state.homeRecords = snap.docs.map(d=>({id:d.id, ...d.data()}));
@@ -584,6 +603,357 @@ async function loadMoreDiary(){
   state.diaryLastDoc = snap.docs[snap.docs.length-1] || null;
   state.diaryHasMore = snap.docs.length === 18;
   state.diaryLoading = false; render();
+}
+
+/* ================= おさんぽ天気（Open-Meteo） ================= */
+/* 気温だけを使ったシンプルな3段階判定（後で調整可能な設定値） */
+const WALK_TEMP_THRESHOLDS = {
+  goodMin: 7,       // 🟢 おすすめ：goodMin ≦ 気温 ＜ warnHighMin
+  warnHighMin: 24,  // 🟡 ようすを見て（暑い側）：warnHighMin ≦ 気温 ＜ dangerHighMin
+  dangerHighMin: 29,// 🔴 さけて（暑い側）：気温 ≧ dangerHighMin
+  warnLowMin: 0,    // 🟡 ようすを見て（寒い側）：warnLowMin ≦ 気温 ＜ goodMin
+  // 🔴 さけて（寒い側）：気温 ＜ warnLowMin
+};
+function judgeWalk(temp){
+  if(temp == null || isNaN(temp)) return "warn";
+  if(temp >= WALK_TEMP_THRESHOLDS.dangerHighMin || temp < WALK_TEMP_THRESHOLDS.warnLowMin) return "bad";
+  if(temp >= WALK_TEMP_THRESHOLDS.warnHighMin || temp < WALK_TEMP_THRESHOLDS.goodMin) return "warn";
+  return "good";
+}
+const JUDGE_META = {
+  good: { label: "おすすめ", cls: "good" },
+  warn: { label: "ようすを見て", cls: "warn" },
+  bad:  { label: "さけて", cls: "bad" },
+};
+const WMO_CODE_META = {
+  0:{label:"快晴",emoji:"☀️"}, 1:{label:"晴れ",emoji:"🌤️"}, 2:{label:"晴れ時々くもり",emoji:"⛅"}, 3:{label:"くもり",emoji:"☁️"},
+  45:{label:"霧",emoji:"🌫️"}, 48:{label:"霧",emoji:"🌫️"},
+  51:{label:"霧雨",emoji:"🌦️"}, 53:{label:"霧雨",emoji:"🌦️"}, 55:{label:"霧雨",emoji:"🌦️"},
+  56:{label:"着氷性の霧雨",emoji:"🌧️"}, 57:{label:"着氷性の霧雨",emoji:"🌧️"},
+  61:{label:"雨",emoji:"🌧️"}, 63:{label:"雨",emoji:"🌧️"}, 65:{label:"強い雨",emoji:"🌧️"},
+  66:{label:"着氷性の雨",emoji:"🌧️"}, 67:{label:"着氷性の雨",emoji:"🌧️"},
+  71:{label:"雪",emoji:"🌨️"}, 73:{label:"雪",emoji:"🌨️"}, 75:{label:"強い雪",emoji:"🌨️"}, 77:{label:"雪",emoji:"🌨️"},
+  80:{label:"にわか雨",emoji:"🌦️"}, 81:{label:"にわか雨",emoji:"🌦️"}, 82:{label:"激しいにわか雨",emoji:"🌦️"},
+  85:{label:"にわか雪",emoji:"🌨️"}, 86:{label:"にわか雪",emoji:"🌨️"},
+  95:{label:"雷雨",emoji:"⛈️"}, 96:{label:"雷雨（ひょう）",emoji:"⛈️"}, 99:{label:"雷雨（ひょう）",emoji:"⛈️"},
+};
+function weatherCodeMeta(code){ return WMO_CODE_META[code] || { label:"—", emoji:"🌡️" }; }
+
+async function loadWeatherData(force){
+  const pet = state.pet;
+  if(!pet || !pet.weatherLoc || pet.weatherLoc.lat==null){ state.weather = null; render(); return; }
+  if(!force && state.weather && state.weather.fetchedAt && (Date.now()-state.weather.fetchedAt) < 15*60*1000) return;
+  state.weatherLoading = true; state.weatherError = null; render();
+  try{
+    const { lat, lon } = pet.weatherLoc;
+    const params = [
+      `latitude=${lat}`, `longitude=${lon}`,
+      `current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,is_day`,
+      `hourly=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation_probability,weather_code,uv_index,soil_temperature_0cm`,
+      `daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset`,
+      `timezone=auto`, `forecast_days=8`
+    ].join("&");
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+    if(!res.ok) throw new Error("weather http " + res.status);
+    const data = await res.json();
+    state.weather = { data, fetchedAt: Date.now() };
+    if(state.weatherSelectedDayIdx==null) state.weatherSelectedDayIdx = 0;
+  }catch(e){
+    console.error("loadWeatherData error", e);
+    state.weatherError = "天気情報を取得できませんでした。しばらくしてからもう一度お試しください。";
+  }
+  state.weatherLoading = false; render();
+}
+
+/* ---- 都道府県・市区町村の選択（Geolonia 全国住所データ） ---- */
+let jpAddressData = null;      // [{pref, point:[lng,lat], cities:[{code, city, ward, point:[lng,lat]}, ...]}, ...]
+let jpAddressLoading = false;
+let jpAddressError = null;
+let jpCityIndex = {};          // code -> {pref, city, ward, label, lat, lon}
+let jpCitiesByPref = {};       // pref -> [{code, label}, ...]
+
+async function ensureJpAddressData(){
+  if(jpAddressData || jpAddressLoading) return;
+  jpAddressLoading = true; jpAddressError = null; render();
+  try{
+    const res = await fetch("https://japanese-addresses-v2.geoloniamaps.com/api/ja.json");
+    if(!res.ok) throw new Error("address data http " + res.status);
+    const json = await res.json();
+    jpAddressData = json.data;
+    jpCityIndex = {}; jpCitiesByPref = {};
+    jpAddressData.forEach(prefObj=>{
+      const list = (prefObj.cities||[]).map(c=>{
+        const label = c.city + (c.ward || "");
+        jpCityIndex[c.code] = { pref: prefObj.pref, city: c.city, ward: c.ward||"", label, lat: c.point[1], lon: c.point[0] };
+        return { code: c.code, label };
+      });
+      jpCitiesByPref[prefObj.pref] = list;
+    });
+  }catch(e){
+    console.error("ensureJpAddressData error", e);
+    jpAddressError = "地域データを読み込めませんでした。しばらくしてからもう一度お試しください。";
+  }
+  jpAddressLoading = false; render();
+}
+function onWeatherPrefChange(pref){
+  state.weatherFormPref = pref;
+  state.weatherFormCity = "";
+  render();
+}
+function onWeatherCityChange(code){
+  state.weatherFormCity = code;
+  render();
+}
+function saveWeatherLocation(){
+  const code = state.weatherFormCity;
+  if(!code){ showToast("市区町村を選択してください"); return; }
+  const info = jpCityIndex[code];
+  if(!info){ showToast("選択した地域が見つかりませんでした"); return; }
+  const labelInput = document.getElementById("set-weather-label");
+  const customName = labelInput ? labelInput.value.trim() : "";
+  const name = customName || `${info.pref}${info.label}`;
+  const weatherLoc = { name, lat: info.lat, lon: info.lon, pref: info.pref, city: info.label };
+  state.pet = { ...state.pet, weatherLoc };
+  groupRef().set({ weatherLoc }, { merge:true }).catch(e=>console.error("save weatherLoc error", e));
+  showToast("お散歩天気の地域を設定しました");
+  state.weatherFormPref = ""; state.weatherFormCity = "";
+  render();
+  loadWeatherData(true);
+}
+
+function dayNightIcon(isDay, size){
+  const s = size || 44;
+  if(isDay){
+    return `<div style="width:${s}px;height:${s}px;border-radius:50%;background:#F6D98A;display:flex;align-items:center;justify-content:center;font-size:${Math.round(s*0.46)}px;flex-shrink:0;">☀️</div>`;
+  }
+  return `<div class="day-night-icon" style="width:${s}px;height:${s}px;box-shadow:${-Math.round(s*0.3)}px -2px 0 0 #3F4759 inset;flex-shrink:0;"></div>`;
+}
+
+function hourlyForDay(w, dayIdx){
+  const dayStr = w.daily.time[dayIdx];
+  const idxs = [];
+  w.hourly.time.forEach((t,i)=>{ if(t.slice(0,10) === dayStr) idxs.push(i); });
+  return idxs.map(i=>({
+    hour: new Date(w.hourly.time[i]).getHours(),
+    temp: w.hourly.temperature_2m[i],
+    code: w.hourly.weather_code[i],
+    judge: judgeWalk(w.hourly.temperature_2m[i]),
+  }));
+}
+function goodRangesForDay(w, dayIdx){
+  const hours = hourlyForDay(w, dayIdx);
+  const ranges = [];
+  let start=null, prevHour=null;
+  hours.forEach(h=>{
+    if(h.judge==="good"){
+      if(start===null) start = h.hour;
+      prevHour = h.hour;
+    } else if(start!==null){
+      ranges.push([start, prevHour+1]); start=null;
+    }
+  });
+  if(start!==null) ranges.push([start, prevHour+1]);
+  return ranges.map(r => r[1]-r[0]===1 ? `${r[0]}時` : `${r[0]}-${r[1]}時`).join("・");
+}
+function periodLabel(hour){
+  if(hour===5 || hour===8) return "朝";
+  if(hour===11 || hour===14) return "昼";
+  if(hour===17) return "夕";
+  if(hour===20 || hour===23 || hour===2) return "夜";
+  return "";
+}
+function computeWBGT(t, rh){
+  if(t==null || rh==null) return null;
+  const e = (rh/100) * 6.105 * Math.exp((17.27*t)/(237.7+t));
+  return 0.567*t + 0.393*e + 3.94;
+}
+function wbgtMeta(v){
+  if(v>=31) return { label:"危険", bg:"var(--coralSoft)", text:"var(--coralSoftText)" };
+  if(v>=28) return { label:"厳重警戒", bg:"var(--coralSoft)", text:"var(--coralSoftText)" };
+  if(v>=25) return { label:"警戒", bg:"var(--amber)", text:"var(--amberText)" };
+  if(v>=21) return { label:"注意", bg:"var(--amber)", text:"var(--amberText)" };
+  return { label:"ほぼ安全", bg:"var(--mint)", text:"var(--mintText)" };
+}
+function todayPeakStats(w){
+  const dayStr = w.daily.time[0];
+  const idxs = [];
+  w.hourly.time.forEach((t,i)=>{ if(t.slice(0,10) === dayStr) idxs.push(i); });
+  if(!idxs.length) return null;
+  let peakIdx = idxs[0];
+  idxs.forEach(i=>{ if(w.hourly.apparent_temperature[i] > w.hourly.apparent_temperature[peakIdx]) peakIdx = i; });
+  const humidity = w.hourly.relative_humidity_2m[peakIdx];
+  const ground = idxs.reduce((m,i)=>{
+    const v = (w.hourly.soil_temperature_0cm && w.hourly.soil_temperature_0cm[i]!=null) ? w.hourly.soil_temperature_0cm[i] : w.hourly.temperature_2m[i]+8;
+    return Math.max(m, v);
+  }, -Infinity);
+  const uv = idxs.reduce((m,i)=> Math.max(m, (w.hourly.uv_index && w.hourly.uv_index[i]) || 0), 0);
+  const wbgt = computeWBGT(w.hourly.temperature_2m[peakIdx], humidity);
+  return { apparent: w.hourly.apparent_temperature[peakIdx], humidity, ground, uv, wbgt };
+}
+function selectWeatherDay(i){ state.weatherSelectedDayIdx = i; render(); }
+function openWeatherModal(){
+  if(!state.pet.weatherLoc){ switchTab("settings"); showToast("先に「おさんぽ天気」の位置情報を設定してください"); return; }
+  state.modal = { type: "weather" };
+  if(state.weatherSelectedDayIdx==null) state.weatherSelectedDayIdx = 0;
+  render();
+  loadWeatherData();
+}
+
+function renderWeatherBar(){
+  const pet = state.pet;
+  if(!pet.weatherLoc){
+    return `
+    <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="switchTab('settings')">
+      <div style="font-size:22px;flex-shrink:0;">🚶</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">おさんぽ天気</div>
+        <div style="font-size:12px;color:var(--inkSoft);">位置情報を設定すると、お散歩に適した時間帯がわかります</div>
+      </div>
+      <span style="color:var(--inkSoft);flex-shrink:0;">›</span>
+    </div>`;
+  }
+  const w = state.weather && state.weather.data;
+  if(!w){
+    if(state.weatherLoading){
+      return `<div class="weather-bar" style="justify-content:center;"><span class="spin">⏳</span></div>`;
+    }
+    return `<div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span style="font-size:12.5px;color:var(--inkSoft);">${esc(state.weatherError || "天気情報を取得できませんでした")}</span>
+      <button class="btn-secondary" style="padding:7px 12px;font-size:12.5px;" onclick="loadWeatherData(true)">再試行</button>
+    </div>`;
+  }
+  const cur = w.current;
+  const judge = judgeWalk(cur.temperature_2m);
+  const jmeta = JUDGE_META[judge];
+  const wmeta = weatherCodeMeta(cur.weather_code);
+  const ranges = goodRangesForDay(w, 0);
+  return `
+  <div class="weather-bar" onclick="openWeatherModal()">
+    <div class="weather-bar-left">
+      <div class="weather-cond-row">
+        <span style="font-weight:700;font-size:13.5px;">${wmeta.label}</span>
+        <span class="weather-pop-pill">降水 ${Math.round(w.daily.precipitation_probability_max[0])}%</span>
+      </div>
+      <div class="weather-temp-row">
+        <span class="weather-temp-high">${Math.round(w.daily.temperature_2m_max[0])}°</span>
+        <span class="weather-temp-low">${Math.round(w.daily.temperature_2m_min[0])}°</span>
+        <span class="walk-pill ${jmeta.cls}">${jmeta.label}</span>
+        ${ranges ? `<span class="weather-times">${ranges}</span>` : ""}
+      </div>
+    </div>
+    ${dayNightIcon(cur.is_day)}
+  </div>`;
+}
+
+function renderHourRow(h, isFirst){
+  const meta = weatherCodeMeta(h.code);
+  const jmeta = JUDGE_META[h.judge];
+  const label = periodLabel(h.hour);
+  return `
+  <div style="display:flex;align-items:center;gap:10px;padding:11px 4px;${isFirst?'':'border-top:1px solid var(--line);'}">
+    <div style="width:60px;flex-shrink:0;font-size:14px;font-weight:700;">${h.hour}時${label?` <span style="font-size:11px;font-weight:600;color:var(--inkSoft);">${label}</span>`:''}</div>
+    <div style="font-size:18px;width:24px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
+    <div class="mono" style="width:42px;flex-shrink:0;font-size:15px;font-weight:600;">${Math.round(h.temp)}°</div>
+    <div style="flex:1;"></div>
+    <span class="walk-pill ${jmeta.cls}">${jmeta.label}</span>
+  </div>`;
+}
+function renderDayStrip(w){
+  const days = ["日","月","火","水","木","金","土"];
+  const rainCodes = [51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99];
+  return `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px;">
+    ${w.daily.time.map((d,i)=>{
+      const dt = new Date(d+"T00:00:00");
+      const label = i===0 ? "今日" : `${dt.getMonth()+1}/${dt.getDate()}${days[dt.getDay()]}`;
+      const meta = weatherCodeMeta(w.daily.weather_code[i]);
+      const active = state.weatherSelectedDayIdx === i;
+      const isRain = rainCodes.includes(w.daily.weather_code[i]);
+      return `<button onclick="selectWeatherDay(${i})" style="flex:0 0 auto;min-width:72px;text-align:center;padding:10px 6px;border-radius:14px;border:${active?'2px solid #2B3242':'1px solid var(--line)'};background:${isRain?'#2E5F66':'#F2F2F0'};color:${isRain?'#fff':'var(--ink)'};cursor:pointer;">
+        <div style="font-size:11.5px;font-weight:700;">${label}</div>
+        <div style="font-size:17px;margin:4px 0;">${meta.emoji}</div>
+        <div class="mono" style="font-size:11.5px;font-weight:700;">${Math.round(w.daily.temperature_2m_max[i])}/${Math.round(w.daily.temperature_2m_min[i])}</div>
+      </button>`;
+    }).join("")}
+  </div>`;
+}
+function renderTodayDetails(w){
+  const s = todayPeakStats(w);
+  if(!s) return "";
+  const wb = wbgtMeta(s.wbgt);
+  const chip = (icon, val, label) => `
+    <div style="flex:1 1 0;min-width:74px;background:var(--bg);border-radius:12px;padding:9px 6px;text-align:center;">
+      <div style="font-size:11px;color:var(--inkSoft);">${icon} ${label}</div>
+      <div class="mono" style="font-weight:700;font-size:14.5px;margin-top:2px;">${val}</div>
+    </div>`;
+  const updated = state.weather && state.weather.fetchedAt ? new Date(state.weather.fetchedAt).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}) : "";
+  return `
+  <div style="font-weight:700;font-size:14px;margin:4px 0 10px;">今日の詳しいところ</div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+    ${chip("🌡️", Math.round(s.apparent)+"℃", "体感")}
+    ${chip("💧", Math.round(s.humidity)+"%", "湿度")}
+    ${chip("🐾", Math.round(s.ground)+"℃", "地面")}
+    ${chip("☀️", Math.round(s.uv), "UV指数")}
+  </div>
+  <div style="display:flex;align-items:center;gap:9px;background:${wb.bg};color:${wb.text};border-radius:12px;padding:11px 14px;margin-bottom:16px;font-weight:700;font-size:13.5px;">
+    <span>⚠️</span><span>暑さ指数 ${Math.round(s.wbgt)} ${wb.label}</span>
+  </div>
+  <div style="font-size:11.5px;color:var(--inkSoft);line-height:1.8;">
+    各地域の気象データをもとにした簡易的な目安です。暑さ指数は概算値です。ワンちゃん・ネコちゃんの体調に異変を感じたら、すぐに動物病院へご相談ください。<br>
+    ${updated ? `${updated} 時点の予報です（このアプリでは約15分ごとに更新されます）<br>` : ""}
+    Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener" style="color:var(--inkSoft);">Open-Meteo.com</a>（CC BY 4.0）
+  </div>`;
+}
+function renderWeatherModal(){
+  const wrap = (inner) => `<div class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-sheet" style="padding:0;overflow:hidden;">${inner}</div>
+  </div>`;
+  const w = state.weather && state.weather.data;
+  if(!w){
+    return wrap(`
+      <div style="padding:40px 20px;text-align:center;">
+        ${state.weatherLoading ? `<span class="spin" style="font-size:22px;">⏳</span><div style="margin-top:10px;font-size:13px;color:var(--inkSoft);">天気情報を取得しています…</div>`
+          : `<div style="font-size:13px;color:var(--inkSoft);margin-bottom:12px;">${esc(state.weatherError||"天気情報を取得できませんでした")}</div><button class="btn-primary" onclick="loadWeatherData(true)">再試行</button>`}
+        <button class="btn-secondary" style="display:block;margin:16px auto 0;" onclick="closeModal()">閉じる</button>
+      </div>`);
+  }
+  const cur = w.current;
+  const dayIdx = state.weatherSelectedDayIdx || 0;
+  const isToday = dayIdx === 0;
+  const wmeta = weatherCodeMeta(isToday ? cur.weather_code : w.daily.weather_code[dayIdx]);
+  const hours = hourlyForDay(w, dayIdx);
+  const rangesText = goodRangesForDay(w, dayIdx);
+  const dt = new Date(w.daily.time[dayIdx]+"T00:00:00");
+  const days = ["日","月","火","水","木","金","土"];
+  const headingLabel = isToday ? "今日" : `${dt.getMonth()+1}/${dt.getDate()}（${days[dt.getDay()]}）`;
+
+  return wrap(`
+    <div style="position:relative;background:#3F4759;color:#fff;padding:18px 18px 16px;">
+      <button onclick="closeModal()" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,.16);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:13px;cursor:pointer;">✕</button>
+      <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:14.5px;">🐾 おさんぽ予報</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:3px;">📍 ${esc((state.pet.weatherLoc&&state.pet.weatherLoc.name)||'現在地')}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;">
+        <div>
+          <span class="weather-temp-high">${Math.round(isToday ? cur.temperature_2m : w.daily.temperature_2m_max[dayIdx])}°</span>
+          <span class="weather-temp-low" style="margin-left:8px;">${Math.round(w.daily.temperature_2m_min[dayIdx])}°</span>
+          <span style="margin-left:10px;font-size:13px;">${wmeta.label}${isToday ? ` ・降水 ${Math.round(w.daily.precipitation_probability_max[0])}%` : ""}</span>
+        </div>
+        ${isToday ? dayNightIcon(cur.is_day) : `<div style="font-size:26px;">${wmeta.emoji}</div>`}
+      </div>
+    </div>
+    <div style="padding:18px 18px 22px;max-height:72vh;overflow-y:auto;">
+      <div style="font-weight:700;font-size:15px;">${headingLabel}　${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日</div>
+      ${rangesText
+        ? `<div style="color:var(--coral);font-weight:700;font-size:13px;margin-top:8px;">おすすめは ${rangesText}</div>`
+        : `<div style="color:var(--inkSoft);font-size:12.5px;margin-top:8px;">この日はお散歩に適した時間帯が見つかりませんでした。暑さ・寒さに気をつけてください。</div>`}
+      <div style="margin-top:14px;">
+        ${hours.map((h,i)=>renderHourRow(h, i===0)).join("")}
+      </div>
+      <div style="font-weight:700;font-size:14px;margin:22px 0 10px;">これから1週間</div>
+      <div style="font-size:12px;color:var(--inkSoft);margin-bottom:10px;">日を選ぶと、その日の時間ごとに切り替わります。</div>
+      ${renderDayStrip(w)}
+      ${renderTodayDetails(w)}
+    </div>
+  `);
 }
 
 /* ================= pet photo picker (shared by setup & settings) ================= */
@@ -843,6 +1213,9 @@ function captureFormValues(containerId, storeKey){
   state[storeKey] = vals;
 }
 function fv2(storeKey, id, def){
+  // バックグラウンドでの再描画（天気情報の取得完了など）で入力中の値が
+  // 消えないよう、直前のDOMスナップショットを最優先で使う。
+  if(state.__formSnapshot && state.__formSnapshot[id] !== undefined) return state.__formSnapshot[id];
   return (state[storeKey] && state[storeKey][id] !== undefined) ? state[storeKey][id] : def;
 }
 function setPetSetupTmp(field, value){ captureFormValues('pet-setup-card','petSetupFormValues'); state[field] = value; render(); }
@@ -1438,6 +1811,8 @@ function switchTab(tab){
     state.tmpGender = state.pet.gender || "unknown";
     state.tmpNeuter = state.pet.neuter || "unknown";
     state.tmpPetPhoto = state.pet.photo || null;
+    state.weatherFormPref = ""; state.weatherFormCity = "";
+    if(!jpAddressData && !jpAddressLoading) ensureJpAddressData();
   }
   state.tab = tab; state.modal = null;
   render();
@@ -1536,6 +1911,7 @@ function renderHome(){
   }).sort((a,b)=> new Date(a.date)-new Date(b.date));
 
   return `
+  ${renderWeatherBar()}
   ${upcomingSoon.length ? `
   <div class="card" style="padding:14px 16px;margin-bottom:14px;">
     <div style="font-weight:700;font-size:13.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px;">🔔 次回の予定</div>
@@ -1916,6 +2292,41 @@ function renderSettings(){
     <button class="btn-primary" onclick="savePetSettings()">保存</button>
   </div>
 
+  <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">🚶 おさんぽ天気</div>
+  <div class="card" style="padding:16px;margin-bottom:18px;">
+    <div style="font-size:12.5px;color:var(--inkSoft);line-height:1.7;margin-bottom:12px;">
+      お住まいの地域の気温をもとに、お散歩に適した時間帯をホーム画面でお知らせします。都道府県→市区町村の順に選んで設定してください。
+    </div>
+    <div style="font-size:12px;color:var(--inkSoft);margin-bottom:14px;">
+      現在の設定：${pet.weatherLoc ? `<b style="color:var(--ink);">${esc(pet.weatherLoc.name)}</b>（${esc(pet.weatherLoc.pref||'')} ${esc(pet.weatherLoc.city||'')}）` : "未設定"}
+    </div>
+    ${jpAddressError ? `
+      <div style="font-size:12.5px;color:var(--coralSoftText);margin-bottom:10px;">${esc(jpAddressError)}</div>
+      <button class="btn-secondary" style="width:100%;margin-bottom:4px;" onclick="ensureJpAddressData()">再読み込み</button>
+    ` : !jpAddressData ? `
+      <div style="text-align:center;padding:16px;color:var(--inkSoft);font-size:12.5px;"><span class="spin">⏳</span> 地域データを読み込んでいます…</div>
+    ` : `
+      <label class="field"><div class="field-label">都道府県</div>
+        <select id="set-weather-pref" onchange="onWeatherPrefChange(this.value)">
+          <option value="">選択してください</option>
+          ${jpAddressData.map(p=>`<option value="${esc(p.pref)}" ${state.weatherFormPref===p.pref?'selected':''}>${esc(p.pref)}</option>`).join("")}
+        </select>
+      </label>
+      <label class="field"><div class="field-label">市区町村</div>
+        <select id="set-weather-city" ${!state.weatherFormPref?'disabled':''} onchange="onWeatherCityChange(this.value)">
+          <option value="">選択してください</option>
+          ${(jpCitiesByPref[state.weatherFormPref]||[]).map(c=>`<option value="${c.code}" ${state.weatherFormCity===String(c.code)?'selected':''}>${esc(c.label)}</option>`).join("")}
+        </select>
+      </label>
+      <label class="field"><div class="field-label">表示するエリア名（任意）</div><input id="set-weather-label" value="${esc(fv2('petSettingsFormValues','set-weather-label',''))}" placeholder="例：北西部・自宅付近"></label>
+      <button class="btn-primary" style="width:100%;" onclick="saveWeatherLocation()">この地域で設定する</button>
+    `}
+    <div class="field-hint" style="margin-top:12px;">
+      気温の判定基準：🟢おすすめ 7〜24℃未満／🟡ようすを見て 24〜29℃未満・0〜7℃未満／🔴さけて 29℃以上・0℃未満（気温のみのシンプルな目安です）
+    </div>
+    <div style="font-size:10.5px;color:var(--inkSoft);margin-top:8px;line-height:1.6;">住所データ：<a href="https://github.com/geolonia/japanese-addresses-v2" target="_blank" rel="noopener" style="color:var(--inkSoft);">Geolonia 全国住所データ</a>（CC BY 4.0）</div>
+  </div>
+
   <div class="mono" style="font-size:11px;letter-spacing:1px;color:var(--inkSoft);margin:4px 0 8px;">ホームに表示する項目</div>
   <div class="card" style="padding:6px 16px;margin-bottom:18px;">
     <div style="font-size:11.5px;color:var(--inkSoft);padding:10px 0 4px;line-height:1.6;">使わない項目はOFFにすると、ホーム画面から非表示にできます（この端末だけの設定です）。</div>
@@ -1974,6 +2385,7 @@ function renderModal(){
   if(state.modal.type === "event") return renderEventModal();
   if(state.modal.type === "pickCategory") return renderPickCategoryModal();
   if(state.modal.type === "cropPhoto") return renderCropModal();
+  if(state.modal.type === "weather") return renderWeatherModal();
   return "";
 }
 function chipField(label, options, current, subKey){
@@ -2351,6 +2763,11 @@ function restoreFocusState(info){
 function render(){
   const app = document.getElementById("app");
   const focusInfo = captureFocusState(app);
+  const snap = {};
+  app.querySelectorAll('input[id], textarea[id]').forEach(el=>{
+    snap[el.id] = (el.type === "checkbox") ? el.checked : el.value;
+  });
+  state.__formSnapshot = snap;
 
   if(!authReady){
     app.innerHTML = `<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;"><span class="spin" style="font-size:24px;">⏳</span></div>`;
