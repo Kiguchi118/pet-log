@@ -651,12 +651,12 @@ function weatherCategory(code){
   if([71,73,75,77,85,86].includes(code)) return "snow";
   return "sunny";
 }
-/* bg=週間ストリップ用の淡い背景色 / accent=時間ごとの行の左バー用のはっきりした色 */
+/* 週間ストリップ用の色。晴れ＝赤（やや濃いめ）、雨（雷雨含む）＝濃い青など、直感的にわかる配色 */
 const WEATHER_CAT_STYLE = {
-  sunny:  { bg:"#FDECC3", text:"#8A5A16", accent:"#E8A93D" },
-  cloudy: { bg:"#E3E7EC", text:"#4C5560", accent:"#8B97A6" },
-  rain:   { bg:"#D2E6F8", text:"#2B6CA3", accent:"#3E86C4" },
-  snow:   { bg:"#E9F1FA", text:"#3D7A9E", accent:"#6FB8D9" },
+  sunny:  { bg:"#A43831", text:"#FFFFFF" },
+  cloudy: { bg:"#E3E7EC", text:"#4C5560" },
+  rain:   { bg:"#1E4E7C", text:"#FFFFFF" },
+  snow:   { bg:"#EAF4FB", text:"#3D7A9E" },
 };
 
 async function loadWeatherData(force){
@@ -888,11 +888,9 @@ function renderHourRow(h, isFirst, isNow){
   const meta = weatherCodeMeta(h.code);
   const jmeta = JUDGE_META[h.judge];
   const label = periodLabel(h.hour);
-  const catStyle = WEATHER_CAT_STYLE[weatherCategory(h.code)];
-  const barColor = isNow ? "var(--coral)" : catStyle.accent;
   const rowBg = isNow ? "rgba(193,68,58,.10)" : "transparent";
   return `
-  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:7px;padding:5px 7px 5px 9px;margin:2px 0;border-radius:6px;background:${rowBg};border-left:4px solid ${barColor};">
+  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:7px;padding:5px 7px;margin:2px 0;border-radius:6px;background:${rowBg};">
     <div style="width:52px;flex-shrink:0;font-size:12px;font-weight:700;white-space:nowrap;${isNow?'color:var(--coral);':''}">${h.hour}時${label?` <span style="font-size:9.5px;font-weight:600;color:${isNow?'var(--coral)':'var(--inkSoft)'};">${label}</span>`:''}</div>
     <div style="font-size:15px;width:20px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
     <div class="mono" style="width:32px;flex-shrink:0;font-size:12.5px;font-weight:600;${isNow?'color:var(--coral);':''}">${Math.round(h.temp)}°</div>
@@ -909,7 +907,7 @@ function renderDayStrip(w){
       const meta = weatherCodeMeta(w.daily.weather_code[i]);
       const active = state.weatherSelectedDayIdx === i;
       const catStyle = WEATHER_CAT_STYLE[weatherCategory(w.daily.weather_code[i])];
-      return `<button onclick="selectWeatherDay(${i})" style="flex:0 0 auto;min-width:60px;text-align:center;padding:8px 5px;border-radius:12px;border:${active?'2px solid #2B3242':'1px solid rgba(0,0,0,.06)'};background:${catStyle.bg};color:${catStyle.text};cursor:pointer;">
+      return `<button onclick="selectWeatherDay(${i})" style="flex:0 0 auto;min-width:60px;text-align:center;padding:8px 5px;border-radius:12px;border:${active?'2px solid #fff':'1px solid rgba(0,0,0,.06)'};box-shadow:${active?'0 0 0 2px rgba(43,50,66,.6)':'none'};background:${catStyle.bg};color:${catStyle.text};cursor:pointer;">
         <div style="font-size:10.5px;font-weight:700;">${label}</div>
         <div style="font-size:15px;margin:3px 0;">${meta.emoji}</div>
         <div class="mono" style="font-size:10.5px;font-weight:700;">${Math.round(w.daily.temperature_2m_max[i])}/${Math.round(w.daily.temperature_2m_min[i])}</div>
@@ -986,12 +984,12 @@ function renderWeatherModal(){
     <div style="padding:18px 18px 22px;max-height:72vh;overflow-y:auto;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div style="font-weight:700;font-size:15px;">${headingLabel}　${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日</div>
-        ${!isToday ? `<button onclick="selectWeatherDay(0)" style="flex-shrink:0;background:var(--coralSoft);color:var(--coralSoftText);border:none;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">今日へ</button>` : ""}
+        ${!isToday ? `<button onclick="selectWeatherDay(0)" style="flex-shrink:0;background:transparent;color:var(--coral);border:1.5px solid var(--coral);border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">今日へ</button>` : ""}
       </div>
       ${rangesText
         ? `<div style="color:var(--coral);font-weight:700;font-size:13px;margin-top:8px;">おすすめは ${rangesText}</div>`
         : `<div style="color:var(--inkSoft);font-size:12.5px;margin-top:8px;">この日はお散歩に適した時間帯が見つかりませんでした。暑さ・寒さに気をつけてください。</div>`}
-      <div style="margin-top:14px;">
+      <div style="margin-top:14px;border-left:3px solid var(--coral);padding-left:10px;">
         ${hours.map((h,i)=>renderHourRow(h, i===0, h.hour===nowHour)).join("")}
       </div>
       <div style="font-weight:700;font-size:14px;margin:22px 0 10px;">これから1週間</div>
