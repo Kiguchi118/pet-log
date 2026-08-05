@@ -646,20 +646,17 @@ function weatherCodeMeta(code){ return WMO_CODE_META[code] || { label:"—", emo
 /* 天気コードを「晴れ・くもり・霧・雨・雪・雷雨」の大分類に振り分け、それぞれに分かりやすい背景色をあてる */
 function weatherCategory(code){
   if(code===0 || code===1) return "sunny";
-  if(code===2 || code===3) return "cloudy";
-  if(code===45 || code===48) return "fog";
-  if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return "rain";
+  if(code===2 || code===3 || code===45 || code===48) return "cloudy";
+  if([51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99].includes(code)) return "rain";
   if([71,73,75,77,85,86].includes(code)) return "snow";
-  if([95,96,99].includes(code)) return "thunder";
   return "sunny";
 }
+/* bg=週間ストリップ用の淡い背景色 / accent=時間ごとの行の左バー用のはっきりした色 */
 const WEATHER_CAT_STYLE = {
-  sunny:   { bg:"#FDECC3", text:"#8A5A16" },
-  cloudy:  { bg:"#E3E7EC", text:"#4C5560" },
-  fog:     { bg:"#DCE6E8", text:"#4B6B70" },
-  rain:    { bg:"#D2E6F8", text:"#2B6CA3" },
-  snow:    { bg:"#E9F1FA", text:"#3D7A9E" },
-  thunder: { bg:"#E2D9F4", text:"#5B3E96" },
+  sunny:  { bg:"#FDECC3", text:"#8A5A16", accent:"#E8A93D" },
+  cloudy: { bg:"#E3E7EC", text:"#4C5560", accent:"#8B97A6" },
+  rain:   { bg:"#D2E6F8", text:"#2B6CA3", accent:"#3E86C4" },
+  snow:   { bg:"#E9F1FA", text:"#3D7A9E", accent:"#6FB8D9" },
 };
 
 async function loadWeatherData(force){
@@ -892,10 +889,10 @@ function renderHourRow(h, isFirst, isNow){
   const jmeta = JUDGE_META[h.judge];
   const label = periodLabel(h.hour);
   const catStyle = WEATHER_CAT_STYLE[weatherCategory(h.code)];
-  const rowBg = isNow ? "rgba(193,68,58,.12)" : catStyle.bg;
-  const borderLeft = isNow ? "3px solid var(--coral)" : "3px solid transparent";
+  const barColor = isNow ? "var(--coral)" : catStyle.accent;
+  const rowBg = isNow ? "rgba(193,68,58,.10)" : "transparent";
   return `
-  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:7px;padding:5px 7px;margin:2px 0;border-radius:8px;background:${rowBg};border-left:${borderLeft};">
+  <div ${isNow?'id="hour-now-row"':''} style="display:flex;align-items:center;gap:7px;padding:5px 7px 5px 9px;margin:2px 0;border-radius:6px;background:${rowBg};border-left:4px solid ${barColor};">
     <div style="width:52px;flex-shrink:0;font-size:12px;font-weight:700;white-space:nowrap;${isNow?'color:var(--coral);':''}">${h.hour}時${label?` <span style="font-size:9.5px;font-weight:600;color:${isNow?'var(--coral)':'var(--inkSoft)'};">${label}</span>`:''}</div>
     <div style="font-size:15px;width:20px;text-align:center;flex-shrink:0;">${meta.emoji}</div>
     <div class="mono" style="width:32px;flex-shrink:0;font-size:12.5px;font-weight:600;${isNow?'color:var(--coral);':''}">${Math.round(h.temp)}°</div>
@@ -987,7 +984,10 @@ function renderWeatherModal(){
       </div>
     </div>
     <div style="padding:18px 18px 22px;max-height:72vh;overflow-y:auto;">
-      <div style="font-weight:700;font-size:15px;">${headingLabel}　${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+        <div style="font-weight:700;font-size:15px;">${headingLabel}　${dt.getFullYear()}年${dt.getMonth()+1}月${dt.getDate()}日</div>
+        ${!isToday ? `<button onclick="selectWeatherDay(0)" style="flex-shrink:0;background:var(--coralSoft);color:var(--coralSoftText);border:none;border-radius:999px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">今日へ</button>` : ""}
+      </div>
       ${rangesText
         ? `<div style="color:var(--coral);font-weight:700;font-size:13px;margin-top:8px;">おすすめは ${rangesText}</div>`
         : `<div style="color:var(--inkSoft);font-size:12.5px;margin-top:8px;">この日はお散歩に適した時間帯が見つかりませんでした。暑さ・寒さに気をつけてください。</div>`}
