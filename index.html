@@ -613,57 +613,68 @@ async function loadMoreDiary(){
 /* ================= おさんぽ天気（Open-Meteo） ================= */
 /* ---- お散歩判定：気温だけでなく複数の要素を組み合わせて判定 ----
    参考にした知見（獣医・動物保護団体等の公開情報より）：
-   ・体感温度（湿度や風を含む apparent_temperature）を使う。湿度が高いと犬はパンティングで
-     熱を逃がしにくくなるため、気温だけでなく体感温度で見たほうが実態に近い
-     （米国の獣医師が示す目安「気温[℉]＋湿度[%]が150以上なら運動を避ける」も、要は
-     気温と湿度をあわせた体感の指標を見よ、という考え方）
-   ・推定路面温度。晴天で直射日光が当たると、アスファルトは気温より25〜30℃前後も高くなり、
-     気温29℃前後でも路面は55℃前後に達し得る（複数の獣医・ペット関連団体の実測データより）。
-     50℃を超えるあたりから60秒未満で肉球が低温やけどを負う恐れがあるとされるため、
-     気温がさほど高くなくても「晴れ・日中」であれば危険側に倒す
+   ・暑さ側は、湿度や風を含む「体感温度」（apparent_temperature）で判定する。湿度が高いと
+     犬はパンティングで熱を逃がしにくくなるため（米国の獣医師の目安「気温[℉]＋湿度[%]≧150で運動を避ける」も
+     気温と湿度をあわせて見よ、という考え方）
+   ・寒さ側は、風の影響を受けやすい体感温度ではなく「実際の気温」で判定する。風が強いだけの
+     体感温度低下で必要以上に「さけて」判定にならないようにするため
+   ・推定路面温度。晴天で直射日光が当たると、アスファルトは気温より最大25〜30℃前後も高くなり
+     （気温25℃前後→路面約51℃、気温30℃前後→路面約57℃など、獣医・ペット関連団体の実測データより）、
+     50℃を超えるあたりから60秒未満で肉球が低温やけどを負う恐れがあるとされる。ただしこの上昇幅は
+     気温が高い夏場のデータが中心のため、気温が低いうちは上昇幅も小さくなるよう段階的に見積もる
    ・天気そのもの。雷雨や強い雨・雪は、気温に関わらず外出を避けたい天気として扱う
 */
 const WALK_APPARENT_THRESHOLDS = {
-  goodMin: 7,       // 🟢 おすすめ：goodMin ≦ 体感 ＜ warnHighMin
+  goodMin: 7,       // 🟢 おすすめ：goodMin ≦ 気温 ＜ warnHighMin
   warnHighMin: 24,  // 🟡 ようすを見て（暑い側）：warnHighMin ≦ 体感 ＜ dangerHighMin
   dangerHighMin: 29,// 🔴 さけて（暑い側）：体感 ≧ dangerHighMin
-  warnLowMin: 0,    // 🟡 ようすを見て（寒い側）：warnLowMin ≦ 体感 ＜ goodMin
-  // 🔴 さけて（寒い側）：体感 ＜ warnLowMin
+  warnLowMin: 0,    // 🟡 ようすを見て（寒い側）：warnLowMin ≦ 気温 ＜ goodMin
+  // 🔴 さけて（寒い側）：気温 ＜ warnLowMin
 };
 const PAVEMENT_DANGER_C = 52; // ℃。60秒未満で肉球がやけどするリスクが高まるとされる目安
 const PAVEMENT_WARN_C = 45;   // ℃。素手で7秒触れ続けられないくらい熱く、要注意になる目安
 const HEAVY_WEATHER_CODES = [65,75,82,86,95,96,99]; // 強い雨・強い雪・雷雨など、気温に関わらず避けたい天気
 const MODERATE_WEATHER_CODES = [51,53,55,56,57,61,63,66,67,71,73,77,80,81,85]; // 弱い雨・雪など、ようすを見たい天気
 
-/* 気温・天気・昼夜から、路面（アスファルト等）のおおよその温度を推定する */
-function estimatePavementExcess(code, isDay){
+/* 気温・天気・昼夜から、路面（アスファルト等）のおおよその温度を推定する。
+   気温が低いうちは上昇幅を小さく、気温25℃以上で実測データに近い上昇幅になるよう段階的に増やす */
+function scaledExcess(temp, minT, maxT, minE, maxE){
+  if(temp == null) return minE;
+  const frac = Math.max(0, Math.min(1, (temp - minT) / (maxT - minT)));
+  return minE + frac * (maxE - minE);
+}
+function pavementExcess(temp, code, isDay){
   if(!isDay) return 3; // 夜間は日射による蓄熱がほぼ抜けるため、上乗せはわずか
   const cat = weatherCategory(code);
-  if(cat === "sunny") return 28;  // 直射日光がある晴れ：気温+約28℃（実測データの目安）
-  if(cat === "cloudy") return 14; // 曇り・薄曇り：日射が弱く上昇幅も控えめ
-  return 5;                       // 雨・雪など：路面が濡れて冷えやすく上昇はわずか
+  if(cat === "sunny")  return scaledExcess(temp, 12, 25, 8, 27);  // 気温12℃で+8℃、25℃以上で+27℃程度
+  if(cat === "cloudy") return scaledExcess(temp, 12, 25, 4, 13);  // 曇り・薄曇りは上昇幅を控えめに
+  return 3;                                                       // 雨・雪など：路面が濡れて冷えやすく上昇はわずか
 }
 function estimatePavementTemp(airTemp, code, isDay, soilTemp){
   if(airTemp == null) return (soilTemp!=null) ? soilTemp : null;
-  const estimated = airTemp + estimatePavementExcess(code, isDay);
+  const estimated = airTemp + pavementExcess(airTemp, code, isDay);
   return (soilTemp!=null) ? Math.max(soilTemp, estimated) : estimated;
 }
 /* h = { temp, apparent, code, isDay, soilTemp } を受け取り、おすすめ／ようすを見て／さけて を返す */
 function judgeWalk(h){
   if(!h) return "warn";
   const { temp, apparent, code, isDay, soilTemp } = h;
-  const feels = (apparent!=null && !isNaN(apparent)) ? apparent : temp;
-  if(feels == null || isNaN(feels)) return "warn";
+  if(temp == null || isNaN(temp)) return "warn";
+  const heatFeels = (apparent!=null && !isNaN(apparent)) ? apparent : temp;
 
   if(HEAVY_WEATHER_CODES.includes(code)) return "bad";
 
+  // 寒さ側は実際の気温で判定（風による体感低下だけで過剰に「さけて」にならないようにする）
+  if(temp < WALK_APPARENT_THRESHOLDS.warnLowMin) return "bad";
+
   const pavement = estimatePavementTemp(temp, code, isDay, soilTemp);
   if(pavement != null && pavement >= PAVEMENT_DANGER_C) return "bad";
-  if(feels >= WALK_APPARENT_THRESHOLDS.dangerHighMin || feels < WALK_APPARENT_THRESHOLDS.warnLowMin) return "bad";
+  if(heatFeels >= WALK_APPARENT_THRESHOLDS.dangerHighMin) return "bad";
 
   if(MODERATE_WEATHER_CODES.includes(code)) return "warn";
   if(pavement != null && pavement >= PAVEMENT_WARN_C) return "warn";
-  if(feels >= WALK_APPARENT_THRESHOLDS.warnHighMin || feels < WALK_APPARENT_THRESHOLDS.goodMin) return "warn";
+  if(heatFeels >= WALK_APPARENT_THRESHOLDS.warnHighMin) return "warn";
+  if(temp < WALK_APPARENT_THRESHOLDS.goodMin) return "warn";
   return "good";
 }
 const JUDGE_META = {
