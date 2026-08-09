@@ -225,10 +225,11 @@ async function runToastUndo(){
 }
 /* おしっこ・うんちの「様子」は 成功 / 惜しい / 失敗 の3段階。
    status は "good"（未設定含む）/ "soso" / "bad" のいずれかを取る。 */
+/* 内訳バー・ドット専用の色（ボタンより一段濃くして3色を並べたときの視認性を確保） */
 const STATUS_META = {
-  good: { label: "成功",   icon: "✓", bg: "var(--mint)",      text: "var(--mintText)",      bar: "var(--mint)" },
-  soso: { label: "惜しい", icon: "△", bg: "var(--amber)",     text: "var(--amberText)",     bar: "var(--amber)" },
-  bad:  { label: "失敗",   icon: "✕", bg: "var(--coralSoft)", text: "var(--coralSoftText)", bar: "var(--coralSoft)" },
+  good: { label: "成功",   icon: "✓", bg: "var(--mint)",      text: "var(--mintText)",      bar: "#7FC49B" },
+  soso: { label: "惜しい", icon: "△", bg: "var(--amber)",     text: "var(--amberText)",     bar: "#F0B93D" },
+  bad:  { label: "失敗",   icon: "✕", bg: "var(--coralSoft)", text: "var(--coralSoftText)", bar: "#E67C71" },
 };
 function normalizeStatus(status){
   return status === "bad" ? "bad" : status === "soso" ? "soso" : "good";
@@ -2260,8 +2261,7 @@ function statCard(title, stats, key){
   const barHTML = parts.map((p, i) => {
     const isFirst = i === 0, isLast = i === parts.length - 1;
     const radius = `${isFirst?'999px':'0'} ${isLast?'999px':'0'} ${isLast?'999px':'0'} ${isFirst?'999px':'0'}`;
-    const divider = !isLast ? `box-shadow:1.5px 0 0 0 #fff inset;` : ``;
-    return `<span style="flex:${p.n};background:${p.bg};border-top:1.5px solid ${p.line};border-bottom:1.5px solid ${p.line};${isFirst?`border-left:1.5px solid ${p.line};`:``}${isLast?`border-right:1.5px solid ${p.line};`:``}border-radius:${radius};box-sizing:border-box;${divider}"></span>`;
+    return `<span style="flex:${p.n};background:${p.bg};border-top:1.5px solid ${p.line};border-bottom:1.5px solid ${p.line};${isFirst?`border-left:1.5px solid ${p.line};`:``}${isLast?`border-right:1.5px solid ${p.line};`:``}border-radius:${radius};box-sizing:border-box;"></span>`;
   }).join("");
   const dotRow = (n,color,borderColor,label) => `
     <div style="display:flex;align-items:center;gap:6px;">
