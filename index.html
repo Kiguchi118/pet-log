@@ -107,7 +107,9 @@
   @keyframes spin{to{transform:rotate(360deg);}}
   .row-btn{background:var(--coral);color:#fff;font-weight:700;font-size:13.5px;border:none;border-radius:999px;padding:10px 18px;cursor:pointer;white-space:nowrap;}
   .row-btn.good{background:var(--mint);color:var(--mintText);}
+  .row-btn.soso{background:var(--amber);color:var(--amberText);}
   .row-btn.bad{background:var(--coralSoft);color:var(--coralSoftText);}
+  .row-btn.compact{padding:8px 9px;font-size:12px;}
   .icon-circle{width:46px;height:46px;border-radius:50%;background:var(--cardSoft);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0;overflow:hidden;}
   .icon-circle img{width:100%;height:100%;object-fit:cover;}
   .toppill{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:#fff;border:1px solid var(--line);cursor:pointer;flex-shrink:0;}
@@ -221,9 +223,22 @@ async function runToastUndo(){
     await t.undo();
   }catch(e){ console.error("undo error", e); }
 }
+/* おしっこ・うんちの「様子」は 成功 / 惜しい / 失敗 の3段階。
+   status は "good"（未設定含む）/ "soso" / "bad" のいずれかを取る。 */
+const STATUS_META = {
+  good: { label: "成功",   icon: "✓", bg: "var(--mint)",      text: "var(--mintText)" },
+  soso: { label: "惜しい", icon: "△", bg: "var(--amber)",     text: "var(--amberText)" },
+  bad:  { label: "失敗",   icon: "✕", bg: "var(--coralSoft)", text: "var(--coralSoftText)" },
+};
+function normalizeStatus(status){
+  return status === "bad" ? "bad" : status === "soso" ? "soso" : "good";
+}
+function statusText(status){
+  return STATUS_META[normalizeStatus(status)].label;
+}
 function statusParenLabel(type, status){
   if(type !== "pee" && type !== "poop") return "";
-  return `（${status==='bad' ? '失敗' : '成功'}）`;
+  return `（${statusText(status)}）`;
 }
 function refreshRecordViews(){
   if(state.tab === "home") loadHome();
@@ -404,8 +419,8 @@ function summarizeRecord(r){
   switch(r.type){
     case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "お水を記録";
-    case "pee": return [(r.status==="bad"?"失敗":"成功"), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
-    case "poop": return [(r.status==="bad"?"失敗":"成功"), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolAmount, r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
+    case "pee": return [statusText(r.status), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
+    case "poop": return [statusText(r.status), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolAmount, r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
     case "vomit": return [r.vomitContent, r.count?`${r.count}回`:"", r.memo].filter(Boolean).join(" ・ ") || "吐いたことを記録";
     case "walk": return [r.duration?`${r.duration}分`:"", r.distance?`${r.distance}km`:"", r.condition, r.memo].filter(Boolean).join(" ・ ") || "散歩を記録";
     case "weight": return [`${r.value} kg`, r.memo].filter(Boolean).join(" ・ ");
@@ -447,8 +462,8 @@ function recordDetailText(r){
 }
 function recordBadge(r){
   if(r.type !== "pee" && r.type !== "poop") return "";
-  const bad = r.status === "bad";
-  return `<span style="background:${bad?'var(--coralSoft)':'var(--mint)'};color:${bad?'var(--coralSoftText)':'var(--mintText)'};padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px;flex-shrink:0;">${bad?'失敗':'成功'}</span>`;
+  const m = STATUS_META[normalizeStatus(r.status)];
+  return `<span style="background:${m.bg};color:${m.text};padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px;flex-shrink:0;">${m.label}</span>`;
 }
 /* きろく(リスト・カレンダー)で使う共通の記録行テンプレート */
 function renderRecordRow(r, opts){
@@ -546,16 +561,23 @@ async function loadStatsForPeriod(days){
     const recs = snap.docs.map(d=>d.data());
     const pee = recs.filter(r=>r.type==="pee");
     const poop = recs.filter(r=>r.type==="poop");
-    const goodCount = arr => arr.filter(r=>r.status!=="bad").length;
-    const rate = arr => arr.length ? Math.round(100*goodCount(arr)/arr.length) : null;
+    /* 「惜しい」は成功にも失敗にも寄せず、独立した集計として扱う。
+       成功率は厳密に「成功」のみを分子にし、惜しい・失敗は成功率には含めない。
+       惜しい込みでの目安として「惜しい込み成功率（惜しいを0.5成功として加算）」も別途出す。 */
+    const countBy = (arr, st) => arr.filter(r=>normalizeStatus(r.status)===st).length;
+    const rate = arr => arr.length ? Math.round(100*countBy(arr,"good")/arr.length) : null;
+    const rateAdjusted = arr => arr.length ? Math.round(100*(countBy(arr,"good")+countBy(arr,"soso")*0.5)/arr.length) : null;
     state.stats = {
       peeRate: rate(pee), poopRate: rate(poop),
+      peeRateAdjusted: rateAdjusted(pee), poopRateAdjusted: rateAdjusted(poop),
       peeCount: pee.length, poopCount: poop.length,
-      peeGood: goodCount(pee), poopGood: goodCount(poop),
+      peeGood: countBy(pee,"good"), poopGood: countBy(poop,"good"),
+      peeSoso: countBy(pee,"soso"), poopSoso: countBy(poop,"soso"),
+      peeBad: countBy(pee,"bad"), poopBad: countBy(poop,"bad"),
     };
   }catch(e){
     console.error("loadStats error", e);
-    state.stats = { peeRate:null, poopRate:null, peeCount:0, poopCount:0, peeGood:0, poopGood:0 };
+    state.stats = { peeRate:null, poopRate:null, peeRateAdjusted:null, poopRateAdjusted:null, peeCount:0, poopCount:0, peeGood:0, poopGood:0, peeSoso:0, poopSoso:0, peeBad:0, poopBad:0 };
   }
   render();
 }
@@ -1275,7 +1297,7 @@ function openRecordModal(catKey, editRecord, presetDay, defaultStatus){
   state.modal = { type:"record", catKey, editRecord: editRecord || null, presetDay: presetDay || null };
   state.modalSub = {
     amount: (editRecord && editRecord.amount) || "ふつう",
-    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : (defaultStatus === "bad" ? "bad" : "good"),
+    status: (editRecord && editRecord.status !== undefined) ? editRecord.status : normalizeStatus(defaultStatus),
     condition: (editRecord && editRecord.condition) || "元気",
     urineColor: (editRecord && editRecord.urineColor) || "",
     urineAmount: (editRecord && editRecord.urineAmount) || "",
@@ -1382,7 +1404,7 @@ async function saveRecordFromModal(){
       rec.urineColor = state.modalSub.urineColor || "";
       rec.urineAmount = state.modalSub.urineAmount || "";
       rec.photo = state.modalPhoto || null;
-      rec.status = state.modalSub.status === "bad" ? "bad" : "good";
+      rec.status = normalizeStatus(state.modalSub.status);
     }
     if(catKey === "poop"){
       rec.stoolScore = state.modalSub.stoolScore || "";
@@ -1390,7 +1412,7 @@ async function saveRecordFromModal(){
       rec.stoolColor = state.modalSub.stoolColor || "";
       rec.concerns = state.modalSub.concerns || [];
       rec.photo = state.modalPhoto || null;
-      rec.status = state.modalSub.status === "bad" ? "bad" : "good";
+      rec.status = normalizeStatus(state.modalSub.status);
     }
     if(catKey === "walk"){
       rec.duration = val("rf-duration") ? Number(val("rf-duration")) : null;
@@ -1784,7 +1806,7 @@ const CSV_COLUMNS = [
   { key:"time", header:"時刻" },
   { key:"typeLabel", header:"種類" },
   { key:"amount", header:"量" },
-  { key:"statusLabel", header:"様子（成功・失敗）" },
+  { key:"statusLabel", header:"様子（成功・惜しい・失敗）" },
   { key:"urineColor", header:"尿の色" },
   { key:"urineAmount", header:"尿の量" },
   { key:"stoolScore", header:"便スコア" },
@@ -1819,7 +1841,7 @@ function recordToCsvRow(r){
     time: r.datetime ? fmtTime(r.datetime) : "",
     typeLabel: meta.label || r.type,
     amount: r.amount || "",
-    statusLabel: r.status===undefined ? "" : (r.status==="bad" ? "失敗" : "成功"),
+    statusLabel: r.status===undefined ? "" : statusText(r.status),
     urineColor: r.urineColor || "",
     urineAmount: r.urineAmount || "",
     stoolScore: (r.stoolScore || r.stoolScore===0) ? r.stoolScore : "",
@@ -2123,8 +2145,9 @@ function renderCategoryRows(list, lastByType){
     let action = "";
     if(c.quick === "binary"){
       action = `
-        <button class="row-btn good" onclick="openRecordModal('${c.key}', null, null, 'good')">✓ 成功</button>
-        <button class="row-btn bad" onclick="openRecordModal('${c.key}', null, null, 'bad')">✕ 失敗</button>`;
+        <button class="row-btn compact good" onclick="openRecordModal('${c.key}', null, null, 'good')">✓成功</button>
+        <button class="row-btn compact soso" onclick="openRecordModal('${c.key}', null, null, 'soso')">△惜しい</button>
+        <button class="row-btn compact bad" onclick="openRecordModal('${c.key}', null, null, 'bad')">✕失敗</button>`;
     } else if(c.quick === "instant"){
       action = `<button class="row-btn" onclick="quickLog('${c.key}',{amount:'ふつう'})">記録</button>`;
     } else {
@@ -2139,7 +2162,7 @@ function renderCategoryRows(list, lastByType){
           <div style="font-size:12px;color:var(--inkSoft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${subtitle}</div>
         </div>
       </button>
-      <div style="display:flex;gap:8px;flex-shrink:0;">${action}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">${action}</div>
     </div>`;
   }).join("");
 }
@@ -2218,6 +2241,33 @@ function renderHistory(){
   `;
 }
 
+/* おしっこ／うんちの成功率カード。
+   成功率は「成功」のみを分子にした厳密な値。惜しいは成功にも失敗にもカウントしない代わりに、
+   内訳（成功・惜しい・失敗の件数）と、惜しいを0.5成功として加味した「惜しい込み」の目安を併記する。 */
+function statCard(title, stats, key){
+  const rate = stats ? stats[key+"Rate"] : null;
+  const rateAdj = stats ? stats[key+"RateAdjusted"] : null;
+  const count = stats ? stats[key+"Count"] : 0;
+  const good = stats ? stats[key+"Good"] : 0;
+  const soso = stats ? stats[key+"Soso"] : 0;
+  const bad = stats ? stats[key+"Bad"] : 0;
+  const seg = (n,color) => count>0 && n>0 ? `<span style="flex:${n};background:${color};height:5px;"></span>` : "";
+  return `
+    <div class="card" style="flex:1;padding:14px 16px;">
+      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:6px;">${title}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;">
+        <span class="mono" style="font-size:24px;font-weight:600;">${!stats ? "…" : (rate===null?"-":rate+"%")}</span>
+        ${count>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${good}/${count}回)</span>` : ""}
+      </div>
+      ${count>0 ? `
+      <div style="display:flex;border-radius:999px;overflow:hidden;background:var(--line);margin:8px 0 6px;">
+        ${seg(good,'var(--mintText)')}${seg(soso,'var(--amberText)')}${seg(bad,'var(--coralSoftText)')}
+      </div>
+      <div style="font-size:11px;color:var(--inkSoft);line-height:1.6;">
+        成功${good} ・ 惜しい${soso} ・ 失敗${bad}${soso>0 ? `<br>惜しい込みなら ${rateAdj}%` : ""}
+      </div>` : ""}
+    </div>`;
+}
 function renderHistoryList(){
   const stats = state.stats;
   const statsBlock = `
@@ -2225,20 +2275,8 @@ function renderHistoryList(){
     ${[7,14,30].map(d=>`<button class="chip ${state.statsPeriod===d?'active':''}" onclick="setStatsPeriod(${d})">${d}日</button>`).join("")}
   </div>
   <div style="display:flex;gap:10px;margin-bottom:18px;">
-    <div class="card" style="flex:1;padding:14px 16px;">
-      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:6px;">おしっこ成功率</div>
-      <div style="display:flex;align-items:baseline;gap:6px;">
-        <span class="mono" style="font-size:24px;font-weight:600;">${!stats ? "…" : (stats.peeRate===null?"-":stats.peeRate+"%")}</span>
-        ${stats && stats.peeCount>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${stats.peeGood}/${stats.peeCount}回)</span>` : ""}
-      </div>
-    </div>
-    <div class="card" style="flex:1;padding:14px 16px;">
-      <div style="font-size:12.5px;color:var(--inkSoft);margin-bottom:6px;">うんち成功率</div>
-      <div style="display:flex;align-items:baseline;gap:6px;">
-        <span class="mono" style="font-size:24px;font-weight:600;">${!stats ? "…" : (stats.poopRate===null?"-":stats.poopRate+"%")}</span>
-        ${stats && stats.poopCount>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${stats.poopGood}/${stats.poopCount}回)</span>` : ""}
-      </div>
-    </div>
+    ${statCard("おしっこ成功率", stats, "pee")}
+    ${statCard("うんち成功率", stats, "poop")}
   </div>`;
 
   const grouped = {};
@@ -2557,9 +2595,11 @@ function renderRecordModal(){
   else if(catKey === "pee"){
     fields = `
       <div class="field"><div class="field-label">様子</div><div class="chip-row">
-        <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${(sub.status==='good'||!sub.status)?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${sub.status==='soso'?'active':''}" onclick="setModalSub('status','soso')">△ 惜しい</button>
         <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
       </div></div>
+      <div class="field-hint">「惜しい」の目安：トイレの近くでできた、トイレの端にはみ出した、など。</div>
       ${chipField("尿の色（あれば選択）", URINE_COLORS, sub.urineColor, "urineColor")}
       ${chipField("量（あれば選択）", URINE_AMOUNTS, sub.urineAmount, "urineAmount")}
       ${renderRecordPhotoField()}
@@ -2567,9 +2607,11 @@ function renderRecordModal(){
   } else if(catKey === "poop"){
     fields = `
       <div class="field"><div class="field-label">様子</div><div class="chip-row">
-        <button class="chip ${sub.status!=='bad'?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${(sub.status==='good'||!sub.status)?'active':''}" onclick="setModalSub('status','good')">✓ 成功</button>
+        <button class="chip ${sub.status==='soso'?'active':''}" onclick="setModalSub('status','soso')">△ 惜しい</button>
         <button class="chip ${sub.status==='bad'?'active':''}" onclick="setModalSub('status','bad')">✕ 失敗</button>
       </div></div>
+      <div class="field-hint">「惜しい」の目安：トイレの近くでできた、トイレの端にはみ出した、など。</div>
       <div style="font-size:11.5px;color:var(--inkSoft);margin:-6px 0 12px;line-height:1.6;">下痢や便に異物が混ざる状態が続く場合は、誤食や消化器の不調の可能性もあります。心配なときは動物病院にご相談ください。</div>
       <div class="field">
         <div class="field-label">便の状態（あれば選択）</div>
