@@ -226,9 +226,9 @@ async function runToastUndo(){
 /* おしっこ・うんちの「様子」は 成功 / 惜しい / 失敗 の3段階。
    status は "good"（未設定含む）/ "soso" / "bad" のいずれかを取る。 */
 const STATUS_META = {
-  good: { label: "成功",   icon: "✓", bg: "var(--mint)",      text: "var(--mintText)",      bar: "#4E9B72" },
-  soso: { label: "惜しい", icon: "△", bg: "var(--amber)",     text: "var(--amberText)",     bar: "#E3A83B" },
-  bad:  { label: "失敗",   icon: "✕", bg: "var(--coralSoft)", text: "var(--coralSoftText)", bar: "#C1443A" },
+  good: { label: "成功",   icon: "✓", bg: "var(--mint)",      text: "var(--mintText)",      bar: "var(--mint)" },
+  soso: { label: "惜しい", icon: "△", bg: "var(--amber)",     text: "var(--amberText)",     bar: "var(--amber)" },
+  bad:  { label: "失敗",   icon: "✕", bg: "var(--coralSoft)", text: "var(--coralSoftText)", bar: "var(--coralSoft)" },
 };
 function normalizeStatus(status){
   return status === "bad" ? "bad" : status === "soso" ? "soso" : "good";
@@ -2253,9 +2253,9 @@ function statCard(title, stats, key){
   const soso = stats ? stats[key+"Soso"] : 0;
   const bad = stats ? stats[key+"Bad"] : 0;
   const seg = (n,color) => count>0 && n>0 ? `<span style="flex:${n};background:${color};"></span>` : "";
-  const dotRow = (n,color,label) => `
+  const dotRow = (n,color,borderColor,label) => `
     <div style="display:flex;align-items:center;gap:6px;">
-      <span style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></span>
+      <span style="width:9px;height:9px;border-radius:50%;background:${color};border:1.5px solid ${borderColor};flex-shrink:0;box-sizing:border-box;"></span>
       <span style="font-size:11.5px;color:var(--inkSoft);flex:1;">${label}</span>
       <span class="mono" style="font-size:12px;font-weight:600;color:var(--ink);">${n}</span>
     </div>`;
@@ -2267,13 +2267,13 @@ function statCard(title, stats, key){
         ${count>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${good}/${count}回)</span>` : ""}
       </div>
       ${count>0 ? `
-      <div style="display:flex;gap:2px;background:var(--line);border-radius:999px;overflow:hidden;height:7px;margin:10px 0;">
+      <div style="display:flex;gap:2px;background:var(--line);border-radius:999px;overflow:hidden;height:8px;margin:10px 0;border:1px solid var(--line);">
         ${seg(good, STATUS_META.good.bar)}${seg(soso, STATUS_META.soso.bar)}${seg(bad, STATUS_META.bad.bar)}
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;">
-        ${dotRow(good, STATUS_META.good.bar, "成功")}
-        ${dotRow(soso, STATUS_META.soso.bar, "惜しい")}
-        ${dotRow(bad, STATUS_META.bad.bar, "失敗")}
+        ${dotRow(good, STATUS_META.good.bar, STATUS_META.good.text, "成功")}
+        ${dotRow(soso, STATUS_META.soso.bar, STATUS_META.soso.text, "惜しい")}
+        ${dotRow(bad, STATUS_META.bad.bar, STATUS_META.bad.text, "失敗")}
       </div>
       ${soso>0 ? `
       <div style="margin-top:9px;">
