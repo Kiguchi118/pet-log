@@ -2252,7 +2252,7 @@ function statCard(title, stats, key){
   const good = stats ? stats[key+"Good"] : 0;
   const soso = stats ? stats[key+"Soso"] : 0;
   const bad = stats ? stats[key+"Bad"] : 0;
-  const seg = (n,color) => count>0 && n>0 ? `<span style="flex:${n};background:${color};"></span>` : "";
+  const seg = (n,color,borderColor) => count>0 && n>0 ? `<span style="flex:${n};background:${color};border:1.5px solid ${borderColor};box-sizing:border-box;"></span>` : "";
   const dotRow = (n,color,borderColor,label) => `
     <div style="display:flex;align-items:center;gap:6px;">
       <span style="width:9px;height:9px;border-radius:50%;background:${color};border:1.5px solid ${borderColor};flex-shrink:0;box-sizing:border-box;"></span>
@@ -2267,8 +2267,8 @@ function statCard(title, stats, key){
         ${count>0 ? `<span class="mono" style="font-size:12px;color:var(--inkSoft);">(${good}/${count}回)</span>` : ""}
       </div>
       ${count>0 ? `
-      <div style="display:flex;gap:2px;background:var(--line);border-radius:999px;overflow:hidden;height:8px;margin:10px 0;border:1px solid var(--line);">
-        ${seg(good, STATUS_META.good.bar)}${seg(soso, STATUS_META.soso.bar)}${seg(bad, STATUS_META.bad.bar)}
+      <div style="display:flex;gap:2px;background:var(--line);border-radius:999px;overflow:hidden;height:9px;margin:10px 0;">
+        ${seg(good, STATUS_META.good.bar, STATUS_META.good.text)}${seg(soso, STATUS_META.soso.bar, STATUS_META.soso.text)}${seg(bad, STATUS_META.bad.bar, STATUS_META.bad.text)}
       </div>
       <div style="display:flex;flex-direction:column;gap:5px;">
         ${dotRow(good, STATUS_META.good.bar, STATUS_META.good.text, "成功")}
