@@ -3075,7 +3075,14 @@ function renderFeedingGuide(){
 
   const stage = feedingStageFromAgeDays(age.days);
   const stdGrams = interpolateFeedingGrams(latestWeight, stage.key);
-  const mochiGrams = Math.round(stdGrams * 1.15);
+  /* 「もっちり仕上げ」の割合について：
+     複数の獣医栄養関連の情報源で共通して見られるのは、体重を増やしたい場合
+     「まず10%増やして1週間後に体重を見て、変化がなければさらに10%増やす」
+     という“少しずつ増やして体重の変化を見ながら調整する”考え方であり、
+     「+◯%が正解」という決まった科学的な係数があるわけではない。
+     ここではその最初のステップに合わせて標準+10%を出発点の目安として示し、
+     固定値ではなく「様子を見ながら調整するもの」であることを明記する。 */
+  const mochiGrams = Math.round(stdGrams * 1.10);
   const overTable = latestWeight > FEEDING_TABLE[FEEDING_TABLE.length-1].maxW;
 
   const mealBlock = (label, total, tint, textTint) => `
@@ -3096,10 +3103,11 @@ function renderFeedingGuide(){
     </div>
     <div style="display:flex;gap:10px;">
       ${mealBlock("標準", stdGrams, "var(--mint)", "var(--mintText)")}
-      ${mealBlock("もっちり仕上げ", mochiGrams, "var(--coralSoft)", "var(--coralSoftText)")}
+      ${mealBlock("もっちり仕上げ（+10%）", mochiGrams, "var(--coralSoft)", "var(--coralSoftText)")}
     </div>
-    ${overTable ? `<div style="font-size:11px;color:var(--inkSoft);margin-top:10px;line-height:1.6;">※体重が表の最大値（9kg）を超えているため、表の傾きから外挿した参考値です。</div>` : ""}
-    <div style="font-size:10.5px;color:var(--inkSoft);margin-top:10px;line-height:1.6;">フードパッケージの給与量表をもとにした概算です（もっちり仕上げは標準より約15%多めを目安にしています）。フードの種類・運動量・体質によって適量は変わります。愛犬の体型を見ながら調整し、不安な場合は動物病院にご相談ください。</div>
+    <div style="font-size:9px;color:var(--inkSoft);margin-top:9px;line-height:1.55;">
+      給与量表をもとにした概算です。生後日数・体重は最新の登録内容から自動計算され、記録を更新するたびに変わります。もっちり仕上げの+10%は、体重を増やしたいときに「まず10%増やして1週間後の体重を見ながら調整する」という一般的な考え方の最初のステップを目安にしたもので、厳密な算出式ではありません。${overTable ? "体重が表の最大値（9kg）を超えているため外挿した参考値です。" : ""}体型や体重の変化を見ながら量を調整し、増えなければ様子を見て少しずつ増やす、増えすぎたら減らす、不安な場合は動物病院にご相談ください。
+    </div>
   </div>`;
 }
 function renderWeight(){
