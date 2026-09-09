@@ -305,6 +305,40 @@ function humanAgeApprox(years, months){
   else h = 24 + (t-2)*4;
   return Math.max(1, Math.round(h));
 }
+/* ================= 給与量目安（フードパッケージの給与量表を元にした概算） =================
+   添付の給与量表（体重 × 離乳期／4〜9ヶ月／9〜12ヶ月）をもとに、実際の体重を
+   ブラケット内で線形補間して1日の目安量(g)を計算する。
+   ・体重が表の最大値(9kg)を超える場合は、最後のブラケットの傾きで外挿する
+   ・生後12ヶ月以降（成犬）は表の対象外のため、9〜12ヶ月の列を参考値として使う
+   あくまでメーカーの表をもとにした概算であり、フードの種類・運動量・体質に
+   よって適量は変わる。実際の給与量は商品パッケージや動物病院の指導を優先してください。 */
+const FEEDING_TABLE = [
+  { minW:0, maxW:1, weaning:[0,56],    stage2:[0,47],    stage3:[0,38]   },
+  { minW:1, maxW:2, weaning:[56,95],   stage2:[47,79],   stage3:[38,63]  },
+  { minW:2, maxW:4, weaning:[95,160],  stage2:[79,133],  stage3:[63,108] },
+  { minW:4, maxW:6, weaning:[160,216], stage2:[133,180], stage3:[108,144]},
+  { minW:6, maxW:9, weaning:[216,293], stage2:[180,245], stage3:[144,196]},
+];
+function feedingStageFromAgeDays(days){
+  if(days==null) return null;
+  if(days < 120) return { key:"weaning", label:"離乳期", inTable:true };
+  if(days < 270) return { key:"stage2", label:"4〜9ヶ月", inTable:true };
+  if(days < 365) return { key:"stage3", label:"9〜12ヶ月", inTable:true };
+  return { key:"stage3", label:"成犬（12ヶ月以降）", inTable:false };
+}
+function interpolateFeedingGrams(weightKg, stageKey){
+  if(weightKg==null || weightKg<=0) return null;
+  const last = FEEDING_TABLE[FEEDING_TABLE.length-1];
+  const bracket = FEEDING_TABLE.find(b => weightKg <= b.maxW);
+  if(!bracket){
+    const [gMin,gMax] = last[stageKey];
+    const rate = (gMax-gMin) / (last.maxW-last.minW);
+    return Math.round(gMax + (weightKg-last.maxW)*rate);
+  }
+  const [gMin,gMax] = bracket[stageKey];
+  const frac = bracket.maxW===bracket.minW ? 1 : (weightKg-bracket.minW)/(bracket.maxW-bracket.minW);
+  return Math.round(gMin + frac*(gMax-gMin));
+}
 function localDayStr(input){
   const d = (input instanceof Date) ? input : new Date(input);
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -3016,6 +3050,58 @@ function render(){
 }
 
 /* ================= WEIGHT ================= */
+function renderFeedingGuide(){
+  const pet = state.pet;
+  const age = pet ? ageInfo(pet.birthday, pet.species) : null;
+  const log = state.weightPoints;
+  const latestWeight = (log && log.length) ? log[log.length-1].value : null;
+
+  if(!age){
+    return `
+    <div class="card" style="padding:16px;margin-bottom:16px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px;">🍚 給与量の目安</div>
+      <div style="font-size:12.5px;color:var(--inkSoft);line-height:1.7;margin-bottom:10px;">お誕生日を登録すると、生後日数と体重から1日の給与量目安を計算できます。</div>
+      <button class="btn-secondary" onclick="switchTab('settings')">設定でお誕生日を登録</button>
+    </div>`;
+  }
+  if(latestWeight == null){
+    return `
+    <div class="card" style="padding:16px;margin-bottom:16px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px;">🍚 給与量の目安</div>
+      <div style="font-size:12.5px;color:var(--inkSoft);line-height:1.7;margin-bottom:10px;">体重を記録すると、生後日数と体重から1日の給与量目安を計算できます。</div>
+      <button class="row-btn" onclick="openRecordModal('weight')">＋ 体重を記録</button>
+    </div>`;
+  }
+
+  const stage = feedingStageFromAgeDays(age.days);
+  const stdGrams = interpolateFeedingGrams(latestWeight, stage.key);
+  const mochiGrams = Math.round(stdGrams * 1.15);
+  const overTable = latestWeight > FEEDING_TABLE[FEEDING_TABLE.length-1].maxW;
+
+  const mealBlock = (label, total, tint, textTint) => `
+    <div style="flex:1;min-width:0;background:${tint};border-radius:14px;padding:12px 14px;">
+      <div style="font-size:11.5px;font-weight:700;color:${textTint};margin-bottom:4px;white-space:nowrap;">${label}</div>
+      <div class="mono" style="font-size:22px;font-weight:600;color:${textTint};">${total}<span style="font-size:13px;font-weight:600;"> g/日</span></div>
+      <div style="font-size:11px;color:${textTint};margin-top:2px;">1回あたり 約${Math.round(total/3)}g（1日3回）</div>
+    </div>`;
+
+  return `
+  <div class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:2px;">
+      <div style="font-weight:700;font-size:15px;">🍚 給与量の目安</div>
+      <span class="chip" style="background:var(--chip);color:var(--chipText);border:none;padding:3px 10px;font-size:11.5px;white-space:nowrap;">${esc(stage.label)}</span>
+    </div>
+    <div style="font-size:11.5px;color:var(--inkSoft);margin-bottom:12px;line-height:1.6;">
+      生後${age.days}日・体重${latestWeight}kgをもとに計算${stage.inTable===false?"（表の対象は生後12ヶ月まで。以降は9〜12ヶ月の列を参考値として使用しています）":""}
+    </div>
+    <div style="display:flex;gap:10px;">
+      ${mealBlock("標準", stdGrams, "var(--mint)", "var(--mintText)")}
+      ${mealBlock("もっちり仕上げ", mochiGrams, "var(--coralSoft)", "var(--coralSoftText)")}
+    </div>
+    ${overTable ? `<div style="font-size:11px;color:var(--inkSoft);margin-top:10px;line-height:1.6;">※体重が表の最大値（9kg）を超えているため、表の傾きから外挿した参考値です。</div>` : ""}
+    <div style="font-size:10.5px;color:var(--inkSoft);margin-top:10px;line-height:1.6;">フードパッケージの給与量表をもとにした概算です（もっちり仕上げは標準より約15%多めを目安にしています）。フードの種類・運動量・体質によって適量は変わります。愛犬の体型を見ながら調整し、不安な場合は動物病院にご相談ください。</div>
+  </div>`;
+}
 function renderWeight(){
   const log = state.weightPoints;
   const latest = log && log.length ? log[log.length-1] : null;
@@ -3055,6 +3141,8 @@ function renderWeight(){
     ${prev ? diffBlock(prev, true) : ""}
     ${monthAgo ? diffBlock(monthAgo, !prev) : ""}
   </div>
+
+  ${renderFeedingGuide()}
 
   ${minVal!==null ? `
   <div class="card" style="padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-around;text-align:center;">
