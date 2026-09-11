@@ -452,7 +452,7 @@ const EVENT_TYPE_BY_KEY = Object.fromEntries(EVENT_TYPES.map(t=>[t.key,t]));
 
 function summarizeRecord(r){
   switch(r.type){
-    case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
+    case "food": return [r.grams!=null?`${r.grams}g`:"", r.amount, r.memo].filter(Boolean).join(" ・ ") || "ごはんを記録";
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ") || "お水を記録";
     case "pee": return [statusText(r.status), r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
     case "poop": return [statusText(r.status), r.stoolScore?`便スコア${r.stoolScore}`:"", r.stoolAmount, r.stoolColor, r.memo].filter(Boolean).join(" ・ ");
@@ -477,7 +477,7 @@ function summarizeRecord(r){
 /* テキスト全体ではなく「メモなど補足だけ」を返す（バッジと分けて表示するため） */
 function recordDetailText(r){
   switch(r.type){
-    case "food": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
+    case "food": return [r.grams!=null?`${r.grams}g`:"", r.amount, r.memo].filter(Boolean).join(" ・ ");
     case "water": return [r.amount, r.memo].filter(Boolean).join(" ・ ");
     case "pee": return [r.urineColor, r.urineAmount, r.memo].filter(Boolean).join(" ・ ");
     case "poop": return [r.stoolScore?`便スコア${r.stoolScore}（${(STOOL_SCALE.find(s=>s.score===r.stoolScore)||{}).label||""}）`:"", r.stoolAmount, r.stoolColor, (r.concerns&&r.concerns.length?r.concerns.join("・"):""), r.memo].filter(Boolean).join(" ・ ");
@@ -541,6 +541,7 @@ const state = {
 
   diary: [], diaryLastDoc: null, diaryHasMore: true, diaryLoading: false,
   weightPoints: null,
+  todayFoodRecords: null,
   modal: null, modalSub: {}, modalPhoto: null,
   toast: null,
 
@@ -646,6 +647,28 @@ async function loadWeight(){
   }
   render();
   setTimeout(drawWeightChart, 30);
+  loadTodayFood();
+}
+/* 本日（ローカル日付）に記録された「ごはん」の記録一覧を取得する。
+   体重タブに給与量の目安と並べて、本日実際に食べたg数の合計を表示するために使う。 */
+async function loadTodayFood(){
+  state.todayFoodRecords = null; render();
+  try{
+    /* type等値のみで絞り込み、日付範囲はクライアント側でフィルタする
+       （体重(loadWeight)と同じ方式。type+日付範囲の複合クエリは
+       Firestoreの複合インデックス作成が別途必要になるため避けている）。 */
+    const snap = await recordsRef().where("type","==","food").get();
+    const today = localDayStr(new Date());
+    const recs = snap.docs
+      .map(d=>({id:d.id, ...d.data()}))
+      .filter(r => r.datetime && localDayStr(r.datetime) === today);
+    recs.sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
+    state.todayFoodRecords = recs;
+  }catch(e){
+    console.error("loadTodayFood error", e);
+    state.todayFoodRecords = [];
+  }
+  render();
 }
 async function loadDiary(){
   state.diaryLoading = true; render();
@@ -1409,7 +1432,7 @@ function setPetSetupTmp(field, value){ captureFormValues('pet-setup-card','petSe
 function setPetSettingsTmp(field, value){ captureFormValues('pet-settings-card','petSettingsFormValues'); state[field] = value; render(); }
 
 function findRecordById(id){
-  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || (state.weightPoints||[]).find(r=>r.id===id) || null;
+  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || (state.weightPoints||[]).find(r=>r.id===id) || (state.todayFoodRecords||[]).find(r=>r.id===id) || null;
 }
 function openEditRecordById(id){
   const r = findRecordById(id);
@@ -1434,7 +1457,12 @@ async function saveRecordFromModal(){
   };
 
   if(CAT_BY_KEY[catKey]){
-    if(catKey === "food" || catKey === "water"){ rec.amount = state.modalSub.amount; }
+    if(catKey === "food"){
+      rec.amount = state.modalSub.amount;
+      const gramsVal = val("rf-grams");
+      rec.grams = gramsVal !== "" ? Number(gramsVal) : null;
+    }
+    if(catKey === "water"){ rec.amount = state.modalSub.amount; }
     if(catKey === "pee"){
       rec.urineColor = state.modalSub.urineColor || "";
       rec.urineAmount = state.modalSub.urineAmount || "";
@@ -1840,6 +1868,7 @@ const CSV_COLUMNS = [
   { key:"date", header:"日付" },
   { key:"time", header:"時刻" },
   { key:"typeLabel", header:"種類" },
+  { key:"grams", header:"ごはんの量（g）" },
   { key:"amount", header:"量" },
   { key:"statusLabel", header:"様子（成功・惜しい・失敗）" },
   { key:"urineColor", header:"尿の色" },
@@ -1875,6 +1904,7 @@ function recordToCsvRow(r){
     date: r.datetime ? localDayStr(r.datetime) : "",
     time: r.datetime ? fmtTime(r.datetime) : "",
     typeLabel: meta.label || r.type,
+    grams: (r.grams!=null) ? r.grams : "",
     amount: r.amount || "",
     statusLabel: r.status===undefined ? "" : statusText(r.status),
     urineColor: r.urineColor || "",
@@ -2648,7 +2678,12 @@ function renderRecordModal(){
   const isVaccine = prevItem && prevItem.group === "vaccine";
   const sub = state.modalSub;
   let fields = "";
-  if(catKey === "food"){ fields = chipField("量", ["少なめ","ふつう","多め","残した"], sub.amount, "amount"); }
+  if(catKey === "food"){
+    fields = `
+      <label class="field"><div class="field-label">食べた量（g）</div><input id="rf-grams" type="number" inputmode="decimal" min="0" step="1" placeholder="例：120" value="${fv('rf-grams', editRecord && editRecord.grams!=null ? editRecord.grams : '')}"></label>
+      ${chipField("食べ具合（あれば選択）", ["少なめ","ふつう","多め","残した"], sub.amount, "amount")}
+    `;
+  }
   else if(catKey === "water"){ fields = chipField("量の目安", ["少なめ","ふつう","多め"], sub.amount, "amount"); }
   else if(catKey === "pee"){
     fields = `
@@ -3110,6 +3145,86 @@ function renderFeedingGuide(){
     </div>
   </div>`;
 }
+
+/* 「給与量の目安」と同じロジックで、本日の実績と比べるための1日あたり標準給与量(g)を返す。
+   お誕生日または体重が未登録の場合は null（=目安との比較はできない）。 */
+function getStandardDailyGrams(){
+  const pet = state.pet;
+  const age = pet ? ageInfo(pet.birthday, pet.species) : null;
+  const log = state.weightPoints;
+  const latestWeight = (log && log.length) ? log[log.length-1].value : null;
+  if(!age || latestWeight == null) return null;
+  const stage = feedingStageFromAgeDays(age.days);
+  return interpolateFeedingGrams(latestWeight, stage.key);
+}
+
+/* 本日食べたごはんの合計gを、給与量の目安と並べて表示するカード。
+   「ごはん」タブが独立していないため、給与量の目安のすぐ下（同じ体重タブ内）に置くことで、
+   目安と実績をその場で比較できるようにしている。 */
+function renderTodayFoodCard(){
+  const recs = state.todayFoodRecords;
+  const stdGrams = getStandardDailyGrams();
+
+  if(recs === null){
+    return `
+    <div class="card" style="padding:16px;margin-bottom:16px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:10px;">🍽️ 本日の給与実績</div>
+      <div style="text-align:center;padding:14px;"><span class="spin">⏳</span></div>
+    </div>`;
+  }
+
+  const withGrams = recs.filter(r => r.grams != null && !isNaN(r.grams));
+  const total = withGrams.reduce((sum, r) => sum + Number(r.grams), 0);
+  const hasAnyRecord = recs.length > 0;
+
+  let compareBlock = "";
+  if(stdGrams){
+    const pct = Math.min(100, Math.round((total / stdGrams) * 100));
+    const diff = stdGrams - total;
+    const over = diff < 0;
+    const barColor = over ? "var(--coral)" : "var(--mintText)";
+    const diffText = Math.abs(diff) < 1
+      ? "目安ぴったりです"
+      : over ? `目安より ${Math.abs(diff)}g 多く給与しています`
+             : `目安まで残り ${diff}g`;
+    compareBlock = `
+      <div style="margin-top:10px;">
+        <div style="height:8px;border-radius:999px;background:var(--bg);overflow:hidden;">
+          <div style="height:100%;width:${pct}%;border-radius:999px;background:${barColor};transition:width .2s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <span style="font-size:12px;color:var(--inkSoft);">目安 ${stdGrams}g / 日</span>
+          <span class="mono" style="font-size:12.5px;font-weight:600;color:${barColor};">${diffText}</span>
+        </div>
+      </div>`;
+  } else {
+    compareBlock = `<div style="font-size:11.5px;color:var(--inkSoft);margin-top:8px;line-height:1.6;">お誕生日と体重を登録すると、給与量の目安と比較できます。</div>`;
+  }
+
+  const listBlock = hasAnyRecord ? `
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;">
+      ${recs.slice().reverse().map(r => `
+        <button onclick="openEditRecordById('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:var(--cardSoft);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;">
+          <span style="font-size:12.5px;color:var(--inkSoft);">${fmtTime(r.datetime)}${r.amount ? ` ・ ${esc(r.amount)}` : ""}</span>
+          <span class="mono" style="font-size:13.5px;font-weight:600;">${r.grams!=null ? `${r.grams} g` : "―"}</span>
+        </button>`).join("")}
+    </div>` : `<div style="font-size:12.5px;color:var(--inkSoft);margin-top:12px;">まだ本日の記録はありません。</div>`;
+
+  return `
+  <div class="card" style="padding:16px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+      <div style="font-weight:700;font-size:15px;">🍽️ 本日の給与実績</div>
+      <button class="row-btn compact" onclick="openRecordModal('food')">＋ ごはんを記録</button>
+    </div>
+    <div style="margin-top:10px;">
+      <div class="mono" style="font-size:28px;font-weight:600;">${total}<span style="font-size:14px;font-weight:600;"> g</span></div>
+      <div style="font-size:11.5px;color:var(--inkSoft);">本日食べた量の合計${withGrams.length !== recs.length && hasAnyRecord ? "（g未入力の記録は含まれません）" : ""}</div>
+    </div>
+    ${compareBlock}
+    ${listBlock}
+  </div>`;
+}
+
 function renderWeight(){
   const log = state.weightPoints;
   const latest = log && log.length ? log[log.length-1] : null;
@@ -3151,6 +3266,8 @@ function renderWeight(){
   </div>
 
   ${renderFeedingGuide()}
+
+  ${renderTodayFoodCard()}
 
   ${minVal!==null ? `
   <div class="card" style="padding:14px 16px;margin-bottom:16px;display:flex;justify-content:space-around;text-align:center;">
