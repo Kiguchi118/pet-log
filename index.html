@@ -245,6 +245,7 @@ function refreshRecordViews(){
   if(state.tab === "home") loadHome();
   if(state.tab === "history"){
     if(state.historySubTab === "calendar") loadCalendarMonth();
+    else if(state.historySubTab === "food") loadFoodRecords();
     else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
   }
   if(state.tab === "weight") loadWeight();
@@ -541,7 +542,7 @@ const state = {
 
   diary: [], diaryLastDoc: null, diaryHasMore: true, diaryLoading: false,
   weightPoints: null,
-  todayFoodRecords: null,
+  foodRecords: null, foodPeriod: 14,
   modal: null, modalSub: {}, modalPhoto: null,
   toast: null,
 
@@ -647,28 +648,26 @@ async function loadWeight(){
   }
   render();
   setTimeout(drawWeightChart, 30);
-  loadTodayFood();
+  loadFoodRecords();
 }
-/* 本日（ローカル日付）に記録された「ごはん」の記録一覧を取得する。
-   体重タブに給与量の目安と並べて、本日実際に食べたg数の合計を表示するために使う。 */
-async function loadTodayFood(){
-  state.todayFoodRecords = null; render();
+/* 「ごはん」記録を全件取得する。体重タブの「本日の実績」と、きろく＞ごはんタブの
+   過去の記録・グラフの両方でこのデータを共有して使う。
+   type等値のみで絞り込み、日付での絞り込みはクライアント側で行う
+   （体重(loadWeight)と同じ方式。type+日付範囲の複合クエリだと
+   Firestoreの複合インデックス作成が別途必要になるため避けている）。 */
+async function loadFoodRecords(){
+  state.foodRecords = null; render();
   try{
-    /* type等値のみで絞り込み、日付範囲はクライアント側でフィルタする
-       （体重(loadWeight)と同じ方式。type+日付範囲の複合クエリは
-       Firestoreの複合インデックス作成が別途必要になるため避けている）。 */
     const snap = await recordsRef().where("type","==","food").get();
-    const today = localDayStr(new Date());
-    const recs = snap.docs
-      .map(d=>({id:d.id, ...d.data()}))
-      .filter(r => r.datetime && localDayStr(r.datetime) === today);
+    const recs = snap.docs.map(d=>({id:d.id, ...d.data()}));
     recs.sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
-    state.todayFoodRecords = recs;
+    state.foodRecords = recs;
   }catch(e){
-    console.error("loadTodayFood error", e);
-    state.todayFoodRecords = [];
+    console.error("loadFoodRecords error", e);
+    state.foodRecords = [];
   }
   render();
+  setTimeout(drawFoodChart, 30);
 }
 async function loadDiary(){
   state.diaryLoading = true; render();
@@ -1432,7 +1431,7 @@ function setPetSetupTmp(field, value){ captureFormValues('pet-setup-card','petSe
 function setPetSettingsTmp(field, value){ captureFormValues('pet-settings-card','petSettingsFormValues'); state[field] = value; render(); }
 
 function findRecordById(id){
-  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || (state.weightPoints||[]).find(r=>r.id===id) || (state.todayFoodRecords||[]).find(r=>r.id===id) || null;
+  return state.historyRecords.find(r=>r.id===id) || state.homeRecords.find(r=>r.id===id) || state.calendarRecords.find(r=>r.id===id) || (state.weightPoints||[]).find(r=>r.id===id) || (state.foodRecords||[]).find(r=>r.id===id) || null;
 }
 function openEditRecordById(id){
   const r = findRecordById(id);
@@ -2037,15 +2036,25 @@ function switchTab(tab){
   if(tab === "history"){
     if(state.historySubTab === "calendar") loadCalendarMonth();
     else if(state.historySubTab === "memories") loadDiary();
+    else if(state.historySubTab === "food") loadFoodRecords();
     else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
   }
   if(tab === "weight") loadWeight();
+}
+/* 体重タブの「本日の給与実績」から、きろく＞ごはんタブへワンタップで遷移するための専用関数。
+   switchTab()経由だと現在のhistorySubTab（リスト等）分のデータも無駄に読み込んでしまうため、
+   直接ごはんタブへ切り替える。 */
+function goToFoodHistory(){
+  state.tab = "history"; state.historySubTab = "food"; state.modal = null;
+  render();
+  loadFoodRecords();
 }
 function switchHistorySubTab(sub){
   state.historySubTab = sub;
   render();
   if(sub === "calendar") loadCalendarMonth();
   else if(sub === "memories") loadDiary();
+  else if(sub === "food") loadFoodRecords();
   else { loadHistory(); loadStatsForPeriod(state.statsPeriod); }
 }
 function setStatsPeriod(days){ loadStatsForPeriod(days); }
@@ -2071,6 +2080,48 @@ function drawWeightChart(){
   weightChartInstance = new Chart(canvas.getContext("2d"), {
     type: "line",
     data: { labels, datasets: [{ data, borderColor: "#C1443A", backgroundColor: "#C1443A", tension: 0.3, pointRadius: 3 }] },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { family: "IBM Plex Mono", size: 11 }, color: "#8B7A6E" }, grid: { display: false } },
+        y: { ticks: { font: { family: "IBM Plex Mono", size: 11 }, color: "#8B7A6E" }, grid: { color: "#F0E1D2" } }
+      }
+    }
+  });
+}
+
+/* ごはんの記録から「日付ごとの合計g」の配列を作る（新しい日付が最後）。
+   期間(days)を指定すると直近days日分だけに絞る。 */
+function foodDailyTotals(days){
+  const recs = state.foodRecords || [];
+  const byDay = {};
+  recs.forEach(r => {
+    if(r.grams == null || isNaN(r.grams) || !r.datetime) return;
+    const day = localDayStr(r.datetime);
+    byDay[day] = (byDay[day] || 0) + Number(r.grams);
+  });
+  const dayKeys = Object.keys(byDay).sort();
+  const limited = days ? dayKeys.slice(-days) : dayKeys;
+  return limited.map(day => ({ day, total: byDay[day] }));
+}
+
+let foodChartInstance = null;
+function drawFoodChart(){
+  const canvas = document.getElementById("food-canvas");
+  if(!canvas) return;
+  const totals = foodDailyTotals(state.foodPeriod);
+  if(totals.length < 2) return;
+  const labels = totals.map(t => new Date(t.day+"T00:00:00").toLocaleDateString("ja-JP",{month:"numeric",day:"numeric"}));
+  const data = totals.map(t => t.total);
+  const target = getStandardDailyGrams();
+  const datasets = [{ type:"bar", data, backgroundColor:"#F7DEDB", borderColor:"#C1443A", borderWidth:1, borderRadius:4, order:2 }];
+  if(target){
+    datasets.push({ type:"line", data: labels.map(()=>target), borderColor:"#8B7A6E", borderDash:[5,4], borderWidth:1.5, pointRadius:0, fill:false, order:1 });
+  }
+  if(foodChartInstance) foodChartInstance.destroy();
+  foodChartInstance = new Chart(canvas.getContext("2d"), {
+    type: "bar",
+    data: { labels, datasets },
     options: {
       plugins: { legend: { display: false } },
       scales: {
@@ -2300,9 +2351,10 @@ function renderHistory(){
   <div class="subtab-wrap">
     <button class="subtab-btn ${sub==='list'?'active':''}" onclick="switchHistorySubTab('list')">リスト</button>
     <button class="subtab-btn ${sub==='calendar'?'active':''}" onclick="switchHistorySubTab('calendar')">カレンダー</button>
+    <button class="subtab-btn ${sub==='food'?'active':''}" onclick="switchHistorySubTab('food')">ごはん</button>
     <button class="subtab-btn ${sub==='memories'?'active':''}" onclick="switchHistorySubTab('memories')">おもいで</button>
   </div>
-  ${sub==='list' ? renderHistoryList() : sub==='calendar' ? renderHistoryCalendar() : renderDiary()}
+  ${sub==='list' ? renderHistoryList() : sub==='calendar' ? renderHistoryCalendar() : sub==='food' ? renderFoodHistory() : renderDiary()}
   `;
 }
 
@@ -2477,6 +2529,88 @@ function renderCalendarDayPanel(){
   </div>` : ""}
   <button onclick="openPastRecordPicker('${day}')" style="width:100%;padding:11px;margin-top:6px;border-radius:10px;border:1px dashed var(--line);background:transparent;color:var(--inkSoft);font-size:13px;cursor:pointer;">＋ 過去の記録を追加</button>
   `;
+}
+
+/* ================= FOOD HISTORY (きろく＞ごはん：過去の給与量を日ごとに振り返る) =================
+   体重タブの「本日の給与実績」は当日の目安との比較に特化させ、
+   複数日にまたがる振り返り・グラフ・一覧はここにまとめている。 */
+function setFoodPeriod(days){ state.foodPeriod = days; render(); setTimeout(drawFoodChart, 30); }
+function renderFoodHistory(){
+  const recs = state.foodRecords;
+  if(recs === null){
+    return `<div style="text-align:center;padding:40px;"><span class="spin">⏳</span></div>`;
+  }
+
+  const stdGrams = getStandardDailyGrams();
+  const periodDays = state.foodPeriod;
+  const totals = foodDailyTotals(periodDays);
+  const totalsAll = totals.map(t=>t.total);
+  const avg = totalsAll.length ? Math.round(totalsAll.reduce((a,b)=>a+b,0)/totalsAll.length) : null;
+  const minVal = totalsAll.length ? Math.min(...totalsAll) : null;
+  const maxVal = totalsAll.length ? Math.max(...totalsAll) : null;
+
+  const addBtn = `<button class="row-btn" onclick="openRecordModal('food')" style="width:100%;margin-bottom:14px;">＋ ごはんを記録</button>`;
+
+  if(!recs.length){
+    return addBtn + `<div style="text-align:center;padding:30px 12px;color:var(--inkSoft);font-size:13px;">まだごはんの記録がありません。g数を入力して記録すると、ここに日ごとの推移が表示されます。</div>`;
+  }
+
+  const periodChips = `
+  <div class="chip-row" style="margin-bottom:12px;">
+    ${[7,14,30].map(d=>`<button class="chip ${periodDays===d?'active':''}" onclick="setFoodPeriod(${d})">${d}日</button>`).join("")}
+  </div>`;
+
+  const statsRow = `
+  <div class="card" style="padding:14px 16px;margin-bottom:14px;display:flex;justify-content:space-around;text-align:center;">
+    <div><div class="mono" style="font-size:17px;">${avg!=null?`${avg}g`:"—"}</div><div style="font-size:11px;color:var(--inkSoft);">1日平均</div></div>
+    <div><div class="mono" style="font-size:17px;">${minVal!=null?`${minVal}g`:"—"}</div><div style="font-size:11px;color:var(--inkSoft);">最小</div></div>
+    <div><div class="mono" style="font-size:17px;">${maxVal!=null?`${maxVal}g`:"—"}</div><div style="font-size:11px;color:var(--inkSoft);">最大</div></div>
+  </div>`;
+
+  const chartCard = `
+  <div class="card" style="padding:16px 8px 8px;margin-bottom:14px;">
+    ${totals.length<2
+      ? `<div style="text-align:center;padding:24px 12px;color:var(--inkSoft);font-size:13px;">g数を入力した記録が2日分になるとグラフが表示されます。</div>`
+      : `<canvas id="food-canvas" height="220"></canvas>
+         ${stdGrams ? `<div style="display:flex;align-items:center;gap:6px;justify-content:center;margin:8px 0 4px;font-size:11px;color:var(--inkSoft);">
+           <span style="width:14px;height:0;border-top:1.5px dashed var(--inkSoft);display:inline-block;"></span> 給与量の目安（${stdGrams}g/日）
+         </div>` : ""}`
+    }
+  </div>`;
+
+  /* 直近の日から新しい順に、日付ごとにグループ化して一覧表示 */
+  const byDay = {};
+  recs.forEach(r => {
+    const day = r.datetime ? localDayStr(r.datetime) : "";
+    if(!byDay[day]) byDay[day] = [];
+    byDay[day].push(r);
+  });
+  const cutoff = totals.length ? totals[0].day : null;
+  const dayKeys = Object.keys(byDay).filter(d => !cutoff || d >= cutoff).sort().reverse();
+
+  const listBlock = dayKeys.map(day => {
+    const dayRecs = byDay[day].slice().sort((a,b)=> b.datetime.localeCompare(a.datetime));
+    const dayTotal = dayRecs.reduce((s,r)=> s + (r.grams!=null && !isNaN(r.grams) ? Number(r.grams) : 0), 0);
+    const overStd = stdGrams ? dayTotal - stdGrams : null;
+    return `
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="mono" style="font-size:12px;color:var(--inkSoft);">${fmtDateHeading(day)}</div>
+        <span class="mono" style="font-size:12.5px;font-weight:700;color:${overStd!=null && overStd>0 ? 'var(--coral)' : 'var(--mintText)'};">合計 ${dayTotal}g${stdGrams?` ／ 目安${stdGrams}g`:""}</span>
+      </div>
+      <div class="card" style="overflow:hidden;">
+        ${dayRecs.map((r,i)=>`
+        <div onclick="openEditRecordById('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 14px;cursor:pointer;${i>0?'border-top:1px solid var(--line);':''}">
+          <span style="font-size:12.5px;color:var(--inkSoft);">${fmtTime(r.datetime)}${r.amount ? ` ・ ${esc(r.amount)}` : ""}${r.memo?` ・ ${esc(r.memo)}`:""}</span>
+          <span class="mono" style="font-size:13.5px;font-weight:600;flex-shrink:0;">${r.grams!=null ? `${r.grams} g` : "―"}</span>
+        </div>`).join("")}
+      </div>
+    </div>`;
+  }).join("");
+
+  return addBtn + periodChips + statsRow + chartCard +
+    (listBlock || `<div style="text-align:center;padding:20px;color:var(--inkSoft);font-size:13px;">この期間の記録はありません。</div>`) +
+    `<div style="font-size:11.5px;color:var(--inkSoft);text-align:center;margin-top:2px;">記録をタップすると編集・削除できます</div>`;
 }
 
 /* ================= DIARY / おもいで (list with date + author, tap to edit) ================= */
@@ -3082,6 +3216,7 @@ function render(){
   `;
   restoreFocusState(focusInfo);
   if(state.tab === "weight") setTimeout(drawWeightChart, 30);
+  if(state.tab === "history" && state.historySubTab === "food") setTimeout(drawFoodChart, 30);
 }
 
 /* ================= WEIGHT ================= */
@@ -3160,9 +3295,11 @@ function getStandardDailyGrams(){
 
 /* 本日食べたごはんの合計gを、給与量の目安と並べて表示するカード。
    「ごはん」タブが独立していないため、給与量の目安のすぐ下（同じ体重タブ内）に置くことで、
-   目安と実績をその場で比較できるようにしている。 */
+   目安と実績をその場で比較できるようにしている。
+   複数日にまたがる過去分の振り返り・グラフは「きろく＞ごはん」タブに集約し、
+   ここは「今日はどうだったか」をひと目で確認するための最小限の要約に留めている。 */
 function renderTodayFoodCard(){
-  const recs = state.todayFoodRecords;
+  const recs = state.foodRecords;
   const stdGrams = getStandardDailyGrams();
 
   if(recs === null){
@@ -3173,9 +3310,11 @@ function renderTodayFoodCard(){
     </div>`;
   }
 
-  const withGrams = recs.filter(r => r.grams != null && !isNaN(r.grams));
+  const today = localDayStr(new Date());
+  const todayRecs = recs.filter(r => r.datetime && localDayStr(r.datetime) === today);
+  const withGrams = todayRecs.filter(r => r.grams != null && !isNaN(r.grams));
   const total = withGrams.reduce((sum, r) => sum + Number(r.grams), 0);
-  const hasAnyRecord = recs.length > 0;
+  const hasAnyRecord = todayRecs.length > 0;
 
   let compareBlock = "";
   if(stdGrams){
@@ -3201,15 +3340,6 @@ function renderTodayFoodCard(){
     compareBlock = `<div style="font-size:11.5px;color:var(--inkSoft);margin-top:8px;line-height:1.6;">お誕生日と体重を登録すると、給与量の目安と比較できます。</div>`;
   }
 
-  const listBlock = hasAnyRecord ? `
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;">
-      ${recs.slice().reverse().map(r => `
-        <button onclick="openEditRecordById('${r.id}')" style="display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;text-align:left;background:var(--cardSoft);border:none;border-radius:10px;padding:8px 12px;cursor:pointer;">
-          <span style="font-size:12.5px;color:var(--inkSoft);">${fmtTime(r.datetime)}${r.amount ? ` ・ ${esc(r.amount)}` : ""}</span>
-          <span class="mono" style="font-size:13.5px;font-weight:600;">${r.grams!=null ? `${r.grams} g` : "―"}</span>
-        </button>`).join("")}
-    </div>` : `<div style="font-size:12.5px;color:var(--inkSoft);margin-top:12px;">まだ本日の記録はありません。</div>`;
-
   return `
   <div class="card" style="padding:16px;margin-bottom:16px;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
@@ -3218,10 +3348,10 @@ function renderTodayFoodCard(){
     </div>
     <div style="margin-top:10px;">
       <div class="mono" style="font-size:28px;font-weight:600;">${total}<span style="font-size:14px;font-weight:600;"> g</span></div>
-      <div style="font-size:11.5px;color:var(--inkSoft);">本日食べた量の合計${withGrams.length !== recs.length && hasAnyRecord ? "（g未入力の記録は含まれません）" : ""}</div>
+      <div style="font-size:11.5px;color:var(--inkSoft);">本日食べた量の合計${withGrams.length !== todayRecs.length && hasAnyRecord ? "（g未入力の記録は含まれません）" : ""}</div>
     </div>
     ${compareBlock}
-    ${listBlock}
+    <button onclick="goToFoodHistory()" style="width:100%;margin-top:14px;padding:10px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--inkSoft);font-size:12.5px;cursor:pointer;">📖 過去の記録・推移をみる</button>
   </div>`;
 }
 
